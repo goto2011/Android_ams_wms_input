@@ -262,6 +262,7 @@ static T getValueByKey(std::unordered_map<U, T>& map, U key) {
 
 // --- InputDispatcher ---
 
+// d2: 类: InputDispatcher. 单独run在InputDispatcher线程中
 InputDispatcher::InputDispatcher(const sp<InputDispatcherPolicyInterface>& policy) :
     mPolicy(policy),
     mPendingEvent(nullptr), mLastDropReason(DROP_REASON_NOT_DROPPED),
