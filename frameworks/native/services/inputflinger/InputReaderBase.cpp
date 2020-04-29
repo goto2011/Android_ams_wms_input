@@ -42,6 +42,7 @@ InputReaderThread::InputReaderThread(const sp<InputReaderInterface>& reader) :
 InputReaderThread::~InputReaderThread() {
 }
 
+// dg2: InputReader 线程的looper循环.
 bool InputReaderThread::threadLoop() {
     mReader->loopOnce();
     return true;

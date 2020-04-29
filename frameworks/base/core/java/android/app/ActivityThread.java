@@ -7307,6 +7307,7 @@ public final class ActivityThread extends ClientTransactionHandler {
         }
     }
 
+	// dg2: Activity被创建时被调用.
     public static void main(String[] args) {
         Trace.traceBegin(Trace.TRACE_TAG_ACTIVITY_MANAGER, "ActivityThreadMain");
 
@@ -7326,6 +7327,7 @@ public final class ActivityThread extends ClientTransactionHandler {
 
         Process.setArgV0("<pre-initialized>");
 
+		// dg2: 初始化托管层 Looper对象.
         Looper.prepareMainLooper();
 
         // Find the value for {@link #PROC_START_SEQ_IDENT} if provided on the command line.
@@ -7353,6 +7355,7 @@ public final class ActivityThread extends ClientTransactionHandler {
 
         // End of event ActivityThreadMain.
         Trace.traceEnd(Trace.TRACE_TAG_ACTIVITY_MANAGER);
+		// dg2: 开始消息循环。
         Looper.loop();
 
         throw new RuntimeException("Main thread loop unexpectedly exited");

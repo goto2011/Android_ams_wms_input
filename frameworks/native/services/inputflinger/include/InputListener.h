@@ -92,6 +92,7 @@ struct NotifyKeyArgs : public NotifyArgs {
 
 
 /* Describes a motion event. */
+// dg2: TP数据
 struct NotifyMotionArgs : public NotifyArgs {
     int32_t deviceId;
     uint32_t source;
@@ -186,6 +187,7 @@ struct NotifyDeviceResetArgs : public NotifyArgs {
 /*
  * The interface used by the InputReader to notify the InputListener about input events.
  */
+// dg2: 类: reader 回调类, 用于发送事件给 dispatcher.
 class InputListenerInterface : public virtual RefBase {
 protected:
     InputListenerInterface() { }
@@ -204,6 +206,7 @@ public:
  * An implementation of the listener interface that queues up and defers dispatch
  * of decoded events until flushed.
  */
+// dg2: 类: Input事件队列. 
 class QueuedInputListener : public InputListenerInterface {
 protected:
     virtual ~QueuedInputListener();

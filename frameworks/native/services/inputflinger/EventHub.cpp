@@ -242,6 +242,7 @@ bool EventHub::Device::hasValidFd() {
 
 const int EventHub::EPOLL_MAX_EVENTS;
 
+// dg2: 构造函数.
 EventHub::EventHub(void) :
         mBuiltInKeyboardId(NO_BUILT_IN_KEYBOARD), mNextDeviceId(1), mControllerNumbers(),
         mOpeningDevices(nullptr), mClosingDevices(nullptr),
@@ -250,10 +251,12 @@ EventHub::EventHub(void) :
         mPendingEventCount(0), mPendingEventIndex(0), mPendingINotify(false) {
     acquire_wake_lock(PARTIAL_WAKE_LOCK, WAKE_LOCK_ID);
 
-    mEpollFd = epoll_create1(EPOLL_CLOEXEC);
+	// dg2: 创建 epoll对象.
+    mEpollFd = epoll_create(EPOLL_CLOEXEC);
     LOG_ALWAYS_FATAL_IF(mEpollFd < 0, "Could not create epoll instance: %s", strerror(errno));
 
     mINotifyFd = inotify_init();
+	// dg2: 此处 DEVICE_PATH 为"/dev/input"，监听该设备路径.
     mInputWd = inotify_add_watch(mINotifyFd, DEVICE_PATH, IN_DELETE | IN_CREATE);
     LOG_ALWAYS_FATAL_IF(mInputWd < 0, "Could not register INotify for %s: %s",
             DEVICE_PATH, strerror(errno));
@@ -812,6 +815,7 @@ EventHub::Device* EventHub::getDeviceByFdLocked(int fd) const {
     return nullptr;
 }
 
+// dg2: 获取事件. 被 InputReader 调用. 核心.
 size_t EventHub::getEvents(int timeoutMillis, RawEvent* buffer, size_t bufferSize) {
     ALOG_ASSERT(bufferSize >= 1);
 
@@ -822,6 +826,8 @@ size_t EventHub::getEvents(int timeoutMillis, RawEvent* buffer, size_t bufferSiz
     RawEvent* event = buffer;
     size_t capacity = bufferSize;
     bool awoken = false;
+	
+	// dg2: 死循环.
     for (;;) {
         nsecs_t now = systemTime(SYSTEM_TIME_MONOTONIC);
 
@@ -1025,6 +1031,7 @@ size_t EventHub::getEvents(int timeoutMillis, RawEvent* buffer, size_t bufferSiz
         mLock.unlock(); // release lock before poll, must be before release_wake_lock
         release_wake_lock(WAKE_LOCK_ID);
 
+		// dg2: 调用 epoll接口, 读取 /dev/input/input* 上的事件信息.
         int pollResult = epoll_wait(mEpollFd, mPendingEventItems, EPOLL_MAX_EVENTS, timeoutMillis);
 
         acquire_wake_lock(PARTIAL_WAKE_LOCK, WAKE_LOCK_ID);

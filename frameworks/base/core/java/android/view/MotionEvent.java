@@ -201,6 +201,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      */
     public static final int ACTION_MASK             = 0xff;
 
+	// dg2: 以下为 action 定义.
     /**
      * Constant for {@link #getActionMasked}: A pressed gesture has started, the
      * motion contains the initial starting location.
@@ -210,6 +211,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * Use {@link #getButtonState} to retrieve the button state.
      * </p>
      */
+	// dg2: 第一个 手指 初次接触到屏幕 时触发。
     public static final int ACTION_DOWN             = 0;
 
     /**
@@ -217,6 +219,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * motion contains the final release location as well as any intermediate
      * points since the last down or move event.
      */
+	// dg2: 最后一个 手指 离开屏幕 时触发。
     public static final int ACTION_UP               = 1;
 
     /**
@@ -225,6 +228,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * The motion contains the most recent point, as well as any intermediate
      * points since the last down or move event.
      */
+	// dg2: 手指 在屏幕上滑动 时触发，会多次触发。
     public static final int ACTION_MOVE             = 2;
 
     /**
@@ -258,6 +262,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * unmasked action returned by {@link #getAction}.
      * </p>
      */
+	// dg2: 有非主要的手指按下(即按下之前已经有手指在屏幕上)。
     public static final int ACTION_POINTER_DOWN     = 5;
 
     /**
@@ -269,6 +274,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * unmasked action returned by {@link #getAction}.
      * </p>
      */
+	// dg2: 有非主要的手指抬起(即抬起之后仍然有手指在屏幕上)。
     public static final int ACTION_POINTER_UP       = 6;
 
     /**
@@ -284,6 +290,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * {@link View#onTouchEvent(MotionEvent)}.
      * </p>
      */
+	// dg2: 指针在窗口或者View区域移动，但没有按下。
     public static final int ACTION_HOVER_MOVE       = 7;
 
     /**
@@ -300,6 +307,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * {@link View#onTouchEvent(MotionEvent)}.
      * </p>
      */
+	// dg2: 滚轮滚动，可以触发水平滚动(AXIS_HSCROLL)或者垂直滚动(AXIS_VSCROLL)
     public static final int ACTION_SCROLL           = 8;
 
     /**
@@ -313,6 +321,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * {@link View#onTouchEvent(MotionEvent)}.
      * </p>
      */
+	// dg2: 指针移入到窗口或者View区域，但没有按下。
     public static final int ACTION_HOVER_ENTER      = 9;
 
     /**
@@ -326,6 +335,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      * {@link View#onTouchEvent(MotionEvent)}.
      * </p>
      */
+	// dg2: 指针移出到窗口或者View区域，但没有按下。
     public static final int ACTION_HOVER_EXIT       = 10;
 
     /**
@@ -1433,6 +1443,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
             CLASSIFICATION_NONE, CLASSIFICATION_AMBIGUOUS_GESTURE, CLASSIFICATION_DEEP_PRESS})
     public @interface Classification {};
 
+	// dg2: 以下为设备类型.
     /**
      * Tool type constant: Unknown tool type.
      * This constant is used when the tool type is not known or is not relevant,
@@ -1447,6 +1458,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      *
      * @see #getToolType
      */
+	// dg2: 手指
     public static final int TOOL_TYPE_FINGER = 1;
 
     /**
@@ -1454,6 +1466,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      *
      * @see #getToolType
      */
+	// dg2: 手写笔
     public static final int TOOL_TYPE_STYLUS = 2;
 
     /**
@@ -1461,6 +1474,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      *
      * @see #getToolType
      */
+	// dg2: 鼠标
     public static final int TOOL_TYPE_MOUSE = 3;
 
     /**
@@ -1468,6 +1482,7 @@ public final class MotionEvent extends InputEvent implements Parcelable {
      *
      * @see #getToolType
      */
+	// dg2: 橡皮擦
     public static final int TOOL_TYPE_ERASER = 4;
 
     // NOTE: If you add a new tool type here you must also add it to:

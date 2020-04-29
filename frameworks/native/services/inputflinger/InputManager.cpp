@@ -30,11 +30,13 @@
 
 namespace android {
 
+// dg2: 初始化. 初始化 InputDispatcher 和 InputReader.
 InputManager::InputManager(
         const sp<InputReaderPolicyInterface>& readerPolicy,
         const sp<InputDispatcherPolicyInterface>& dispatcherPolicy) {
     mDispatcher = new InputDispatcher(dispatcherPolicy);
     mClassifier = new InputClassifier(mDispatcher);
+	// dg2: 用 InputDispatcher 初始化 InputReader. createInputReader() 在 InputReaderFactory.cpp.
     mReader = createInputReader(readerPolicy, mClassifier);
     initialize();
 }
@@ -43,6 +45,7 @@ InputManager::~InputManager() {
     stop();
 }
 
+// dg2: 初始化两个线程.
 void InputManager::initialize() {
     mReaderThread = new InputReaderThread(mReader);
     mDispatcherThread = new InputDispatcherThread(mDispatcher);

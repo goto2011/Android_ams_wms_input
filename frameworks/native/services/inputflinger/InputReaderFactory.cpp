@@ -19,6 +19,7 @@
 
 namespace android {
 
+// dg2: 创建 InputReader 对象. 其中 listener 为 InputClassifier.
 sp<InputReaderInterface> createInputReader(
         const sp<InputReaderPolicyInterface>& policy,
         const sp<InputListenerInterface>& listener) {

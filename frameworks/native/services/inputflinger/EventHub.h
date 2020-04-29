@@ -259,6 +259,7 @@ public:
     virtual status_t disableDevice(int32_t deviceId) = 0;
 };
 
+// dg2: 类: EventHub类
 class EventHub : public EventHubInterface
 {
 public:

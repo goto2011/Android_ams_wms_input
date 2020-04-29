@@ -112,6 +112,7 @@ public:
  * EventHub or the InputReaderPolicy but it is never held while calling into the
  * InputListener.
  */
+// dg2: 类: InputReader 类.
 class InputReader : public InputReaderInterface {
 public:
     InputReader(const sp<EventHubInterface>& eventHub,
@@ -152,6 +153,7 @@ protected:
     virtual InputDevice* createDeviceLocked(int32_t deviceId, int32_t controllerNumber,
             const InputDeviceIdentifier& identifier, uint32_t classes);
 
+	// dg2: 类: inputReader和系统交互的接口类.
     class ContextImpl : public InputReaderContext {
         InputReader* mReader;
 
@@ -183,6 +185,7 @@ private:
 
     sp<EventHubInterface> mEventHub;
     sp<InputReaderPolicyInterface> mPolicy;
+	// dg2: mQueuedListener 就是 InputDispatcher
     sp<QueuedInputListener> mQueuedListener;
 
     InputReaderConfiguration mConfig;
@@ -485,6 +488,7 @@ struct RawPointerAxes {
 
 
 /* Raw data for a collection of pointers including a pointer id mapping table. */
+// dg2: 坐标点.
 struct RawPointerData {
     struct Pointer {
         uint32_t id;
@@ -761,6 +765,7 @@ public:
     virtual void dump(std::string& dump);
     virtual void configure(nsecs_t when, const InputReaderConfiguration* config, uint32_t changes);
     virtual void reset(nsecs_t when);
+	// dg2: process 是纯虚数, 由子类实现.
     virtual void process(const RawEvent* rawEvent) = 0;
     virtual void timeoutExpired(nsecs_t when);
 
@@ -1009,6 +1014,7 @@ private:
     void sync(nsecs_t when);
 };
 
+// dg2: 类: 触摸屏相关的 InputMapper 类.
 class TouchInputMapper : public InputMapper {
 public:
     explicit TouchInputMapper(InputDevice* device);
@@ -1675,6 +1681,7 @@ private:
 };
 
 
+// dg2: 多点触摸
 class MultiTouchInputMapper : public TouchInputMapper {
 public:
     explicit MultiTouchInputMapper(InputDevice* device);

@@ -205,6 +205,7 @@ static bool isValidMotionAction(int32_t action, int32_t actionButton, int32_t po
     }
 }
 
+// dg2: 对报点做合法性检查
 static bool validateMotionEvent(int32_t action, int32_t actionButton, size_t pointerCount,
         const PointerProperties* pointerProperties) {
     if (! isValidMotionAction(action, actionButton, pointerCount)) {
@@ -262,7 +263,7 @@ static T getValueByKey(std::unordered_map<U, T>& map, U key) {
 
 // --- InputDispatcher ---
 
-// d2: 类: InputDispatcher. 单独run在InputDispatcher线程中
+// dg2: 初始化InputDispatcher. 单独run在InputDispatcher线程中
 InputDispatcher::InputDispatcher(const sp<InputDispatcherPolicyInterface>& policy) :
     mPolicy(policy),
     mPendingEvent(nullptr), mLastDropReason(DROP_REASON_NOT_DROPPED),
@@ -271,6 +272,7 @@ InputDispatcher::InputDispatcher(const sp<InputDispatcherPolicyInterface>& polic
     mDispatchEnabled(false), mDispatchFrozen(false), mInputFilterEnabled(false),
     mFocusedDisplayId(ADISPLAY_ID_DEFAULT),
     mInputTargetWaitCause(INPUT_TARGET_WAIT_CAUSE_NONE) {
+	// dg2: 初始化 looper
     mLooper = new Looper(false);
     mReporter = createInputReporter();
 
@@ -293,6 +295,7 @@ InputDispatcher::~InputDispatcher() {
     }
 }
 
+// dg2: 死循环执行事件分发. 关键.
 void InputDispatcher::dispatchOnce() {
     nsecs_t nextWakeupTime = LONG_LONG_MAX;
     { // acquire lock
@@ -301,7 +304,9 @@ void InputDispatcher::dispatchOnce() {
 
         // Run a dispatch loop if there are no pending commands.
         // The dispatch loop might enqueue commands to run afterwards.
+		// dg2: 在没有 pending指令时执行 dispatchOnceInnerLocked()函数.
         if (!haveCommandsLocked()) {
+			// dg2: 关键
             dispatchOnceInnerLocked(&nextWakeupTime);
         }
 
@@ -318,6 +323,7 @@ void InputDispatcher::dispatchOnce() {
     mLooper->pollOnce(timeoutMillis);
 }
 
+// dg2: 分发事件. 关键.
 void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
     nsecs_t currentTime = now();
 
@@ -438,6 +444,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         break;
     }
 
+	// dg2: 触摸事件
     case EventEntry::TYPE_MOTION: {
         MotionEntry* typedEntry = static_cast<MotionEntry*>(mPendingEvent);
         if (dropReason == DROP_REASON_NOT_DROPPED && isAppSwitchDue) {
@@ -450,6 +457,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         if (dropReason == DROP_REASON_NOT_DROPPED && mNextUnblockedEvent) {
             dropReason = DROP_REASON_BLOCKED;
         }
+		// dg2: 关键
         done = dispatchMotionLocked(currentTime, typedEntry,
                 &dropReason, nextWakeupTime);
         break;
@@ -471,6 +479,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
     }
 }
 
+// dg2: 将事件插入 mInboundQueue 队列. 关键.
 bool InputDispatcher::enqueueInboundEventLocked(EventEntry* entry) {
     bool needWake = mInboundQueue.isEmpty();
     mInboundQueue.enqueueAtTail(entry);
@@ -504,6 +513,8 @@ bool InputDispatcher::enqueueInboundEventLocked(EventEntry* entry) {
         // decides to touch a window in a different application.
         // If the application takes too long to catch up then we drop all events preceding
         // the touch into the other window.
+		// dg2: 在当前应用程序无响应且用户触摸其他应用程序场景下, 做的性能提升.
+		// 方案是: 如果当前窗口花费的时间太长，那么我们将之前的所有事件放到另一个窗口中。
         MotionEntry* motionEntry = static_cast<MotionEntry*>(entry);
         if (motionEntry->action == AMOTION_EVENT_ACTION_DOWN
                 && (motionEntry->source & AINPUT_SOURCE_CLASS_POINTER)
@@ -933,6 +944,7 @@ void InputDispatcher::logOutboundKeyDetails(const char* prefix, const KeyEntry* 
 #endif
 }
 
+// dg2: 分发触摸事件. 关键.
 bool InputDispatcher::dispatchMotionLocked(
         nsecs_t currentTime, MotionEntry* entry, DropReason* dropReason, nsecs_t* nextWakeupTime) {
     ATRACE_CALL();
@@ -2751,6 +2763,7 @@ bool InputDispatcher::shouldSendKeyToInputFilterLocked(const NotifyKeyArgs* args
     return mInputFilterEnabled;
 }
 
+// dg2: 分发触摸事件. 关键.
 void InputDispatcher::notifyMotion(const NotifyMotionArgs* args) {
 #if DEBUG_INBOUND_EVENT_DETAILS
     ALOGD("notifyMotion - eventTime=%" PRId64 ", deviceId=%d, source=0x%x, displayId=%" PRId32
@@ -2797,9 +2810,11 @@ void InputDispatcher::notifyMotion(const NotifyMotionArgs* args) {
     { // acquire lock
         mLock.lock();
 
+		// dg2: 进过滤流程
         if (shouldSendMotionToInputFilterLocked(args)) {
             mLock.unlock();
 
+			// dg2: 新建并初始化了一个 MotionEvent
             MotionEvent event;
             event.initialize(args->deviceId, args->source, args->displayId,
                     args->action, args->actionButton,
@@ -2817,6 +2832,7 @@ void InputDispatcher::notifyMotion(const NotifyMotionArgs* args) {
         }
 
         // Just enqueue a new motion event.
+		// dg2: 然后包装成一个Entry.
         MotionEntry* newEntry = new MotionEntry(args->sequenceNum, args->eventTime,
                 args->deviceId, args->source, args->displayId, policyFlags,
                 args->action, args->actionButton, args->flags,
@@ -2824,6 +2840,7 @@ void InputDispatcher::notifyMotion(const NotifyMotionArgs* args) {
                 args->edgeFlags, args->xPrecision, args->yPrecision, args->downTime,
                 args->pointerCount, args->pointerProperties, args->pointerCoords, 0, 0);
 
+		// dg2: 将这个entry插入到了 mInboundQueue 这个 InputDispatcher 维护的成员变量中。关键.
         needWake = enqueueInboundEventLocked(newEntry);
         mLock.unlock();
     } // release lock
@@ -3477,6 +3494,7 @@ void InputDispatcher::setInputDispatchMode(bool enabled, bool frozen) {
     }
 }
 
+// dg2: 设置是否要对Input事件进行过滤
 void InputDispatcher::setInputFilterEnabled(bool enabled) {
 #if DEBUG_FOCUS
     ALOGD("setInputFilterEnabled: enabled=%d", enabled);
@@ -5284,6 +5302,7 @@ InputDispatcherThread::InputDispatcherThread(const sp<InputDispatcherInterface>&
 InputDispatcherThread::~InputDispatcherThread() {
 }
 
+// dg2: InputDispatcher线程的looper
 bool InputDispatcherThread::threadLoop() {
     mDispatcher->dispatchOnce();
     return true;

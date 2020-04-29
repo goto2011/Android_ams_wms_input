@@ -259,7 +259,7 @@ static void synthesizeButtonKeys(InputReaderContext* context, int32_t action,
 
 
 // --- InputReader ---
-
+// dg2: 构造函数.
 InputReader::InputReader(const sp<EventHubInterface>& eventHub,
         const sp<InputReaderPolicyInterface>& policy,
         const sp<InputListenerInterface>& listener) :
@@ -267,6 +267,8 @@ InputReader::InputReader(const sp<EventHubInterface>& eventHub,
         mNextSequenceNum(1), mGlobalMetaState(0), mGeneration(1),
         mDisableVirtualKeysTimeout(LLONG_MIN), mNextTimeout(LLONG_MAX),
         mConfigurationChangesToRefresh(0) {
+	// dg2: mQueuedListener 就是 InputDispatcher. 
+	// InputReader 持有 InputDispatcher. 以便通过 
     mQueuedListener = new QueuedInputListener(listener);
 
     { // acquire lock
@@ -283,6 +285,7 @@ InputReader::~InputReader() {
     }
 }
 
+// dg2: 死循环从 eventhub中读取Input事件. 核心.
 void InputReader::loopOnce() {
     int32_t oldGeneration;
     int32_t timeoutMillis;
@@ -305,6 +308,7 @@ void InputReader::loopOnce() {
         }
     } // release lock
 
+	// dg2: 从 eventhub中读取事件. 关键.
     size_t count = mEventHub->getEvents(timeoutMillis, mEventBuffer, EVENT_BUFFER_SIZE);
 
     { // acquire lock
@@ -312,6 +316,7 @@ void InputReader::loopOnce() {
         mReaderIsAliveCondition.broadcast();
 
         if (count) {
+			// dg2: 处理事件.
             processEventsLocked(mEventBuffer, count);
         }
 
@@ -344,9 +349,12 @@ void InputReader::loopOnce() {
     // resulting in a deadlock.  This situation is actually quite plausible because the
     // listener is actually the input dispatcher, which calls into the window manager,
     // which occasionally calls into the input reader.
+	// dg2: 将排队的事件刷新给侦听器。不能加锁. 
+	// 因为 listener 是输入调度程序，它调用 wms，而 wms 有时调用 inputReader。
     mQueuedListener->flush();
 }
 
+// dg2: 处理事件.
 void InputReader::processEventsLocked(const RawEvent* rawEvents, size_t count) {
     for (const RawEvent* rawEvent = rawEvents; count;) {
         int32_t type = rawEvent->type;
@@ -363,6 +371,7 @@ void InputReader::processEventsLocked(const RawEvent* rawEvents, size_t count) {
 #if DEBUG_RAW_EVENTS
             ALOGD("BatchSize: %zu Count: %zu", batchSize, count);
 #endif
+			// dg2: 触摸及按键事件走这个分支.
             processEventsForDeviceLocked(deviceId, rawEvent, batchSize);
         } else {
             switch (rawEvent->type) {
@@ -966,6 +975,7 @@ InputReaderPolicyInterface* InputReader::ContextImpl::getPolicy() {
     return mReader->mPolicy.get();
 }
 
+// dg2: 获取java层的消息队列.
 InputListenerInterface* InputReader::ContextImpl::getListener() {
     return mReader->mQueuedListener.get();
 }
@@ -1129,6 +1139,7 @@ void InputDevice::reset(nsecs_t when) {
     notifyReset(when);
 }
 
+// dg2: 设备层处理事件.
 void InputDevice::process(const RawEvent* rawEvents, size_t count) {
     // Process all of the events in order for each mapper.
     // We cannot simply ask each mapper to process them in bulk because mappers may
@@ -1313,6 +1324,7 @@ void CursorButtonAccumulator::clearButtons() {
     mBtnTask = 0;
 }
 
+// dg2: 处理虚拟按键.
 void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
     if (rawEvent->type == EV_KEY) {
         switch (rawEvent->code) {
@@ -1325,6 +1337,7 @@ void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
         case BTN_MIDDLE:
             mBtnMiddle = rawEvent->value;
             break;
+		// dg2: 返回键
         case BTN_BACK:
             mBtnBack = rawEvent->value;
             break;
@@ -1337,6 +1350,7 @@ void CursorButtonAccumulator::process(const RawEvent* rawEvent) {
         case BTN_EXTRA:
             mBtnExtra = rawEvent->value;
             break;
+		// dg2: 历史任务键
         case BTN_TASK:
             mBtnTask = rawEvent->value;
             break;
@@ -4320,6 +4334,7 @@ void TouchInputMapper::reportEventForStatistics(nsecs_t evdevTime) {
     }
 }
 
+// dg2: 触摸屏的 InputMapper的 process函数.
 void TouchInputMapper::process(const RawEvent* rawEvent) {
     mCursorButtonAccumulator.process(rawEvent);
     mCursorScrollAccumulator.process(rawEvent);
@@ -4327,10 +4342,12 @@ void TouchInputMapper::process(const RawEvent* rawEvent) {
 
     if (rawEvent->type == EV_SYN && rawEvent->code == SYN_REPORT) {
         reportEventForStatistics(rawEvent->when);
+		// dg2: 关键.
         sync(rawEvent->when);
     }
 }
 
+// dg2: 关键.
 void TouchInputMapper::sync(nsecs_t when) {
     const RawState* last = mRawStatesPending.empty() ?
             &mCurrentRawState : &mRawStatesPending.back();
@@ -4370,6 +4387,7 @@ void TouchInputMapper::sync(nsecs_t when) {
             next->rawPointerData.hoveringIdBits.value);
 #endif
 
+	// dg2: 关键.
     processRawTouches(false /*timeout*/);
 }
 
@@ -4402,6 +4420,7 @@ void TouchInputMapper::processRawTouches(bool timeout) {
         if (mCurrentRawState.when < mLastRawState.when) {
             mCurrentRawState.when = mLastRawState.when;
         }
+		// dg2: 关键.
         cookAndDispatch(mCurrentRawState.when);
     }
     if (count != 0) {
@@ -4424,6 +4443,7 @@ void TouchInputMapper::processRawTouches(bool timeout) {
     }
 }
 
+// dg2: 关键.
 void TouchInputMapper::cookAndDispatch(nsecs_t when) {
     // Always start with a clean state.
     mCurrentCookedState.clear();
@@ -4439,17 +4459,20 @@ void TouchInputMapper::cookAndDispatch(nsecs_t when) {
     bool buttonsPressed = mCurrentRawState.buttonState & ~mLastRawState.buttonState;
     if (initialDown || buttonsPressed) {
         // If this is a touch screen, hide the pointer on an initial down.
+		// dg2: 隐藏光标
         if (mDeviceMode == DEVICE_MODE_DIRECT) {
             getContext()->fadePointer();
         }
 
         if (mParameters.wake) {
+			// dg2: 拼接 policyFlags. 此处指不进待机.
             policyFlags |= POLICY_FLAG_WAKE;
         }
     }
 
     // Consume raw off-screen touches before cooking pointer data.
     // If touches are consumed, subsequent code will not receive any pointer data.
+	// dg2: 先消费关屏touch事件. 消费后不再接受点击事件.
     if (consumeRawTouches(when, policyFlags)) {
         mCurrentRawState.rawPointerData.clear();
     }
@@ -4460,6 +4483,7 @@ void TouchInputMapper::cookAndDispatch(nsecs_t when) {
     cookPointerData();
 
     // Apply stylus pressure to current cooked state.
+	// dg2: 处理手写笔数据
     applyExternalStylusTouchState(when);
 
     // Synthesize key down from raw buttons if needed.
@@ -4474,6 +4498,7 @@ void TouchInputMapper::cookAndDispatch(nsecs_t when) {
             uint32_t id = idBits.clearFirstMarkedBit();
             const RawPointerData::Pointer& pointer =
                     mCurrentRawState.rawPointerData.pointerForId(id);
+			// dg2: 区分手写笔, 触摸屏, 鼠标.
             if (pointer.toolType == AMOTION_EVENT_TOOL_TYPE_STYLUS
                     || pointer.toolType == AMOTION_EVENT_TOOL_TYPE_ERASER) {
                 mCurrentCookedState.stylusIdBits.markBit(id);
@@ -4524,10 +4549,16 @@ void TouchInputMapper::cookAndDispatch(nsecs_t when) {
         }
 
         if (!mCurrentMotionAborted) {
+			// dg2: 下面几个函数都很重要. 功能是处理不同类型的触摸事件, 最后调用 dispatchMotion()封装数据.
+			// dg2: 按钮释放
             dispatchButtonRelease(when, policyFlags);
+			// dg2: 悬停状态退出
             dispatchHoverExit(when, policyFlags);
+			// dg2: 触摸事件. 关键
             dispatchTouches(when, policyFlags);
+			// dg2: 悬停状态进入及移动.
             dispatchHoverEnterAndMove(when, policyFlags);
+			// dg2: 按钮按下.
             dispatchButtonPress(when, policyFlags);
         }
 
@@ -4777,6 +4808,7 @@ void TouchInputMapper::abortTouches(nsecs_t when, uint32_t policyFlags) {
     }
 }
 
+// dg2: 分发触摸事件. 关键.
 void TouchInputMapper::dispatchTouches(nsecs_t when, uint32_t policyFlags) {
     BitSet32 currentIdBits = mCurrentCookedState.cookedPointerData.touchingIdBits;
     BitSet32 lastIdBits = mLastCookedState.cookedPointerData.touchingIdBits;
@@ -4857,6 +4889,7 @@ void TouchInputMapper::dispatchTouches(nsecs_t when, uint32_t policyFlags) {
                 mDownTime = when;
             }
 
+			// dg2: 分发事件. 关键.
             dispatchMotion(when, policyFlags, mSource,
                     AMOTION_EVENT_ACTION_POINTER_DOWN, 0, 0, metaState, buttonState, 0,
                     mCurrentCookedState.deviceTimestamp,
@@ -6494,12 +6527,14 @@ void TouchInputMapper::abortPointerSimple(nsecs_t when, uint32_t policyFlags) {
     dispatchPointerSimple(when, policyFlags, false, false);
 }
 
+// dg2: 分发事件. 关键
 void TouchInputMapper::dispatchMotion(nsecs_t when, uint32_t policyFlags, uint32_t source,
         int32_t action, int32_t actionButton, int32_t flags,
         int32_t metaState, int32_t buttonState, int32_t edgeFlags, uint32_t deviceTimestamp,
         const PointerProperties* properties, const PointerCoords* coords,
         const uint32_t* idToIndex, BitSet32 idBits, int32_t changedId,
         float xPrecision, float yPrecision, nsecs_t downTime) {
+	// dg2: 最多支持16个点.
     PointerCoords pointerCoords[MAX_POINTERS];
     PointerProperties pointerProperties[MAX_POINTERS];
     uint32_t pointerCount = 0;
@@ -6536,11 +6571,15 @@ void TouchInputMapper::dispatchMotion(nsecs_t when, uint32_t policyFlags, uint32
     std::vector<TouchVideoFrame> frames = mDevice->getEventHub()->getVideoFrames(deviceId);
     std::for_each(frames.begin(), frames.end(),
             [this](TouchVideoFrame& frame) { frame.rotate(this->mSurfaceOrientation); });
+	// dg2: 将事件信息封装为 args.
     NotifyMotionArgs args(mContext->getNextSequenceNum(), when, deviceId,
             source, displayId, policyFlags,
             action, actionButton, flags, metaState, buttonState, MotionClassification::NONE,
             edgeFlags, deviceTimestamp, pointerCount, pointerProperties, pointerCoords,
             xPrecision, yPrecision, downTime, std::move(frames));
+	// dg2: args事件进入 InputDispatcher的 mArgsQueue中。 关键.
+	// getListener() 指向 mReader->mQueuedListener, 即 QueuedInputListener , 也即 InputDispatcher.
+	// notifyMotion() 即 InputListener.cpp 中的 QueuedInputListener::notifyMotion().
     getListener()->notifyMotion(&args);
 }
 

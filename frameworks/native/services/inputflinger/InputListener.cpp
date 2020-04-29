@@ -161,6 +161,7 @@ bool NotifyMotionArgs::operator==(const NotifyMotionArgs& rhs) const {
     return true;
 }
 
+// dg2: 分发事件.
 void NotifyMotionArgs::notify(const sp<InputListenerInterface>& listener) const {
     listener->notifyMotion(this);
 }
@@ -236,6 +237,7 @@ void QueuedInputListener::notifyKey(const NotifyKeyArgs* args) {
     mArgsQueue.push_back(new NotifyKeyArgs(*args));
 }
 
+// dg2: 将事件加入消息队列.
 void QueuedInputListener::notifyMotion(const NotifyMotionArgs* args) {
     mArgsQueue.push_back(new NotifyMotionArgs(*args));
 }
@@ -252,6 +254,7 @@ void QueuedInputListener::flush() {
     size_t count = mArgsQueue.size();
     for (size_t i = 0; i < count; i++) {
         NotifyArgs* args = mArgsQueue[i];
+		// dg2: 调用了各args的notify()函数. 触摸屏是 struct NotifyMotionArgs.
         args->notify(mInnerListener);
         delete args;
     }

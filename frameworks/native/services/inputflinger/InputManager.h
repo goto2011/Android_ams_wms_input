@@ -78,6 +78,7 @@ public:
     virtual sp<InputDispatcherInterface> getDispatcher() = 0;
 };
 
+// dg2: 类: InputManagerInterface.
 class InputManager : public InputManagerInterface, public BnInputFlinger {
 protected:
     virtual ~InputManager();
@@ -103,11 +104,13 @@ public:
 
 private:
     sp<InputReaderInterface> mReader;
+	// dg2: mReaderThread 指向 InputReader线程.
     sp<InputReaderThread> mReaderThread;
 
     sp<InputClassifierInterface> mClassifier;
 
     sp<InputDispatcherInterface> mDispatcher;
+	// dg2: mDispatcherThread 指向 InputDispatcher线程.
     sp<InputDispatcherThread> mDispatcherThread;
 
     void initialize();
