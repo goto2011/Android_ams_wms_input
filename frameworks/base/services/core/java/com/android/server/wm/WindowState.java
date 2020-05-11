@@ -2175,13 +2175,17 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
      */
     private DeadWindowEventReceiver mDeadWindowEventReceiver;
 
+	// dg2: 初始化 InputChannel. 关键.
     void openInputChannel(InputChannel outInputChannel) {
         if (mInputChannel != null) {
             throw new IllegalStateException("Window already has an input channel.");
         }
         String name = getName();
+		// dg2: 初始化 一对 InputChannel.
         InputChannel[] inputChannels = InputChannel.openInputChannelPair(name);
+		// dg2: 作为服务端存放在系统进程中的是inputChannels[0].
         mInputChannel = inputChannels[0];
+		// dg2: 作为客户端的存放在app的ui主线程中的是inputChannels[1].
         mClientChannel = inputChannels[1];
         mInputWindowHandle.token = mClient.asBinder();
         if (outInputChannel != null) {
@@ -2192,8 +2196,11 @@ class WindowState extends WindowContainer<WindowState> implements WindowManagerP
             // If the window died visible, we setup a dummy input channel, so that taps
             // can still detected by input monitor channel, and we can relaunch the app.
             // Create dummy event receiver that simply reports all events as handled.
+			// dg2: 如果窗口消失可见，我们将设置一个虚拟输入通道，以便仍然可以通过输入监控器通道检测到敲击，
+			// 然后可以重新启动该应用程序。创建虚拟事件接收器，它仅将所有事件报告为已处理。
             mDeadWindowEventReceiver = new DeadWindowEventReceiver(mClientChannel);
         }
+		// dg2: 注册服务器端 InputChannel
         mWmService.mInputManager.registerInputChannel(mInputChannel, mClient.asBinder());
     }
 

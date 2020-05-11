@@ -20,7 +20,7 @@ import android.annotation.IntDef;
 import android.annotation.SdkConstant;
 import android.annotation.SdkConstant.SdkConstantType;
 import android.annotation.SystemService;
-import android.annotation.UnsupportedAppUsage;
+import android.compat.annotation.UnsupportedAppUsage;
 import android.content.Context;
 import android.media.AudioAttributes;
 import android.os.Binder;
@@ -517,6 +517,22 @@ public final class InputManager {
             }
         }
         return -1;
+    }
+
+    /**
+     * Queries whether the device's microphone is muted
+     *
+     * @return The mic mute switch state which is one of {@link #SWITCH_STATE_UNKNOWN},
+     * {@link #SWITCH_STATE_OFF} or {@link #SWITCH_STATE_ON}.
+     * @hide
+     */
+    @SwitchState
+    public int isMicMuted() {
+        try {
+            return mIm.isMicMuted();
+        } catch (RemoteException ex) {
+            throw ex.rethrowFromSystemServer();
+        }
     }
 
     /**

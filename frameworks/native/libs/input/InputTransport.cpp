@@ -255,9 +255,11 @@ void InputChannel::setFd(int fd) {
     }
 }
 
+// dg2: 打开 InputChannel 通道对. 关键.
 status_t InputChannel::openInputChannelPair(const std::string& name,
         sp<InputChannel>& outServerChannel, sp<InputChannel>& outClientChannel) {
     int sockets[2];
+	// dg2: 调用系统调用socketpair(), 打开一对 socket.
     if (socketpair(AF_UNIX, SOCK_SEQPACKET, 0, sockets)) {
         status_t result = -errno;
         ALOGE("channel '%s' ~ Could not create socket pair.  errno=%d",
@@ -267,28 +269,34 @@ status_t InputChannel::openInputChannelPair(const std::string& name,
         return result;
     }
 
+	// dg2: socket buffer大小是 32K.
     int bufferSize = SOCKET_BUFFER_SIZE;
     setsockopt(sockets[0], SOL_SOCKET, SO_SNDBUF, &bufferSize, sizeof(bufferSize));
     setsockopt(sockets[0], SOL_SOCKET, SO_RCVBUF, &bufferSize, sizeof(bufferSize));
     setsockopt(sockets[1], SOL_SOCKET, SO_SNDBUF, &bufferSize, sizeof(bufferSize));
     setsockopt(sockets[1], SOL_SOCKET, SO_RCVBUF, &bufferSize, sizeof(bufferSize));
 
+	// dg2: name = app包名.
     std::string serverChannelName = name;
+	// dg2: name+(server).
     serverChannelName += " (server)";
     outServerChannel = new InputChannel(serverChannelName, sockets[0]);
 
     std::string clientChannelName = name;
+	// dg2: name+(client).
     clientChannelName += " (client)";
     outClientChannel = new InputChannel(clientChannelName, sockets[1]);
     return OK;
 }
 
+// dg2: 发送事件.
 status_t InputChannel::sendMessage(const InputMessage* msg) {
     const size_t msgLength = msg->size();
     InputMessage cleanMsg;
     msg->getSanitizedCopy(&cleanMsg);
     ssize_t nWrite;
     do {
+		// dg2: 发送事件.
         nWrite = ::send(mFd, &cleanMsg, msgLength, MSG_DONTWAIT | MSG_NOSIGNAL);
     } while (nWrite == -1 && errno == EINTR);
 
@@ -321,9 +329,11 @@ status_t InputChannel::sendMessage(const InputMessage* msg) {
     return OK;
 }
 
+// dg2: 接受消息.
 status_t InputChannel::receiveMessage(InputMessage* msg) {
     ssize_t nRead;
     do {
+		// dg2: 接受消息.
         nRead = ::recv(mFd, msg, sizeof(InputMessage), MSG_DONTWAIT);
     } while (nRead == -1 && errno == EINTR);
 
@@ -466,6 +476,7 @@ status_t InputPublisher::publishKeyEvent(
     return mChannel->sendMessage(&msg);
 }
 
+// dg2:  发布触摸事件.
 status_t InputPublisher::publishMotionEvent(
         uint32_t seq,
         int32_t deviceId,
@@ -541,6 +552,7 @@ status_t InputPublisher::publishMotionEvent(
         msg.body.motion.pointers[i].properties.copyFrom(pointerProperties[i]);
         msg.body.motion.pointers[i].coords.copyFrom(pointerCoords[i]);
     }
+	// dg2: 调用 InputChannel的 sendMessage()方法进行跨进程通信。
     return mChannel->sendMessage(&msg);
 }
 
@@ -581,6 +593,7 @@ bool InputConsumer::isTouchResamplingEnabled() {
     return property_get_bool(PROPERTY_RESAMPLING_ENABLED, true);
 }
 
+// dg2: 消费事件. 关键.
 status_t InputConsumer::consume(InputEventFactoryInterface* factory,
         bool consumeBatches, nsecs_t frameTime, uint32_t* outSeq, InputEvent** outEvent) {
 #if DEBUG_TRANSPORT_ACTIONS
@@ -600,6 +613,7 @@ status_t InputConsumer::consume(InputEventFactoryInterface* factory,
             mMsgDeferred = false;
         } else {
             // Receive a fresh message.
+			// dg2: 调用 InputChannel 接收另一端发送来的消息.
             status_t result = mChannel->receiveMessage(&mMsg);
             if (result) {
                 // Consume the next batched event unless batches are being held for later.
@@ -632,7 +646,9 @@ status_t InputConsumer::consume(InputEventFactoryInterface* factory,
             break;
         }
 
+		// dg2: 触摸事件.
         case InputMessage::TYPE_MOTION: {
+			// dg2: 查找Move事件所属的Batch. 对于Batch的首个Move事件，batchIndex返回-1.
             ssize_t batchIndex = findBatch(mMsg.body.motion.deviceId, mMsg.body.motion.source);
             if (batchIndex >= 0) {
                 Batch& batch = mBatches.editItemAt(batchIndex);
@@ -643,12 +659,14 @@ status_t InputConsumer::consume(InputEventFactoryInterface* factory,
                             mChannel->getName().c_str());
 #endif
                     break;
+				// dg2: 处理事件取消.
                 } else if (isPointerEvent(mMsg.body.motion.source) &&
                         mMsg.body.motion.action == AMOTION_EVENT_ACTION_CANCEL) {
                     // No need to process events that we are going to cancel anyways
                     const size_t count = batch.samples.size();
                     for (size_t i = 0; i < count; i++) {
                         const InputMessage& msg = batch.samples.itemAt(i);
+						// dg2: 发生事件处理完成的消息.
                         sendFinishedSignal(msg.body.motion.seq, false);
                     }
                     batch.samples.removeItemsAt(0, count);
@@ -675,6 +693,7 @@ status_t InputConsumer::consume(InputEventFactoryInterface* factory,
             // Start a new batch if needed.
             if (mMsg.body.motion.action == AMOTION_EVENT_ACTION_MOVE
                     || mMsg.body.motion.action == AMOTION_EVENT_ACTION_HOVER_MOVE) {
+				// dg2: 创建新的Batch，Move事件添加到Batch.
                 mBatches.push();
                 Batch& batch = mBatches.editTop();
                 batch.samples.push(mMsg);
@@ -685,12 +704,15 @@ status_t InputConsumer::consume(InputEventFactoryInterface* factory,
                 break;
             }
 
+			// dg2: 新建一个 MotionEvent
             MotionEvent* motionEvent = factory->createMotionEvent();
             if (! motionEvent) return NO_MEMORY;
 
             updateTouchState(mMsg);
+			// dg2: 然后用mMsg去进行初始化.
             initializeMotionEvent(motionEvent, &mMsg);
             *outSeq = mMsg.body.motion.seq;
+			// dg2: 存入outEvent.
             *outEvent = motionEvent;
 
 #if DEBUG_TRANSPORT_ACTIONS

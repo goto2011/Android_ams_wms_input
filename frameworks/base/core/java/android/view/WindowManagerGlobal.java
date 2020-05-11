@@ -194,6 +194,7 @@ public final class WindowManagerGlobal {
     }
 
     @UnsupportedAppUsage
+	// dg2: mWindowSession对象的初始化. 关键.
     public static IWindowSession getWindowSession() {
         synchronized (WindowManagerGlobal.class) {
             if (sWindowSession == null) {
@@ -201,8 +202,10 @@ public final class WindowManagerGlobal {
                     // Emulate the legacy behavior.  The global instance of InputMethodManager
                     // was instantiated here.
                     // TODO(b/116157766): Remove this hack after cleaning up @UnsupportedAppUsage
+					// dg2: 在此处实例化了InputMethodManager的全局实例。
                     InputMethodManager.ensureDefaultInstanceForDefaultDisplayIfNecessary();
                     IWindowManager windowManager = getWindowManagerService();
+					// dg2: 获取Session对象，利用Binder机制调用系统线程的方法.
                     sWindowSession = windowManager.openSession(
                             new IWindowSessionCallback.Stub() {
                                 @Override
@@ -306,6 +309,7 @@ public final class WindowManagerGlobal {
         return null;
     }
 
+	// dg2: window初始化过程中, 往window上添加view. 关键.
     public void addView(View view, ViewGroup.LayoutParams params,
             Display display, Window parentWindow) {
         if (view == null) {
@@ -374,6 +378,7 @@ public final class WindowManagerGlobal {
                 }
             }
 
+			// dg2: window的第一个view, ViewRoot.
             root = new ViewRootImpl(view.getContext(), display);
 
             view.setLayoutParams(wparams);
@@ -383,7 +388,9 @@ public final class WindowManagerGlobal {
             mParams.add(wparams);
 
             // do this last because it fires off messages to start doing things
+			// dg2: 最后执行此操作是因为它会触发启动操作的消息.
             try {
+				// dg2: setView. 关键.
                 root.setView(view, wparams, panelParentView);
             } catch (RuntimeException e) {
                 // BadTokenException or InvalidDisplayException, clean up.

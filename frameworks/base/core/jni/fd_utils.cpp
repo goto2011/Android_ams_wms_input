@@ -33,20 +33,25 @@
 
 // Static whitelist of open paths that the zygote is allowed to keep open.
 static const char* kPathWhitelist[] = {
-  "/apex/com.android.conscrypt/javalib/conscrypt.jar",
-  "/apex/com.android.media/javalib/updatable-media.jar",
-  "/dev/null",
-  "/dev/socket/zygote",
-  "/dev/socket/zygote_secondary",
-  "/dev/socket/usap_pool_primary",
-  "/dev/socket/usap_pool_secondary",
-  "/dev/socket/webview_zygote",
-  "/dev/socket/heapprofd",
-  "/sys/kernel/debug/tracing/trace_marker",
-  "/system/framework/framework-res.apk",
-  "/dev/urandom",
-  "/dev/ion",
-  "/dev/dri/renderD129", // Fixes b/31172436
+        "/apex/com.android.conscrypt/javalib/conscrypt.jar",
+        "/apex/com.android.ipsec/javalib/ike.jar",
+        "/apex/com.android.i18n/javalib/core-icu4j.jar",
+        "/apex/com.android.media/javalib/updatable-media.jar",
+        "/apex/com.android.sdkext/javalib/framework-sdkextensions.jar",
+        "/apex/com.android.tethering/javalib/framework-tethering.jar",
+        "/dev/null",
+        "/dev/socket/zygote",
+        "/dev/socket/zygote_secondary",
+        "/dev/socket/usap_pool_primary",
+        "/dev/socket/usap_pool_secondary",
+        "/dev/socket/webview_zygote",
+        "/dev/socket/heapprofd",
+        "/sys/kernel/debug/tracing/trace_marker",
+        "/sys/kernel/tracing/trace_marker",
+        "/system/framework/framework-res.apk",
+        "/dev/urandom",
+        "/dev/ion",
+        "/dev/dri/renderD129", // Fixes b/31172436
 };
 
 static const char kFdPath[] = "/proc/self/fd";
@@ -57,6 +62,10 @@ FileDescriptorWhitelist* FileDescriptorWhitelist::Get() {
     instance_ = new FileDescriptorWhitelist();
   }
   return instance_;
+}
+
+static bool IsArtMemfd(const std::string& path) {
+  return android::base::StartsWith(path, "/memfd:/boot-image-methods.art");
 }
 
 bool FileDescriptorWhitelist::IsAllowed(const std::string& path) const {
@@ -73,17 +82,29 @@ bool FileDescriptorWhitelist::IsAllowed(const std::string& path) const {
   }
 
   // Framework jars are allowed.
-  static const char* kFrameworksPrefix = "/system/framework/";
+  static const char* kFrameworksPrefix[] = {
+          "/system/framework/",
+          "/system_ext/framework/",
+  };
+
   static const char* kJarSuffix = ".jar";
-  if (android::base::StartsWith(path, kFrameworksPrefix)
+
+  for (const auto& frameworks_prefix : kFrameworksPrefix) {
+    if (android::base::StartsWith(path, frameworks_prefix)
+        && android::base::EndsWith(path, kJarSuffix)) {
+      return true;
+    }
+  }
+
+  // Jars from the ART APEX are allowed.
+  static const char* kArtApexPrefix = "/apex/com.android.art/javalib/";
+  if (android::base::StartsWith(path, kArtApexPrefix)
       && android::base::EndsWith(path, kJarSuffix)) {
     return true;
   }
 
-  // Jars from the runtime apex are allowed.
-  static const char* kRuntimeApexPrefix = "/apex/com.android.runtime/javalib/";
-  if (android::base::StartsWith(path, kRuntimeApexPrefix)
-      && android::base::EndsWith(path, kJarSuffix)) {
+  // the in-memory file created by ART through memfd_create is allowed.
+  if (IsArtMemfd(path)) {
     return true;
   }
 
@@ -100,8 +121,8 @@ bool FileDescriptorWhitelist::IsAllowed(const std::string& path) const {
   static const char* kVendorOverlaySubdir = "/system/vendor/overlay-subdir/";
   static const char* kSystemProductOverlayDir = "/system/product/overlay/";
   static const char* kProductOverlayDir = "/product/overlay";
-  static const char* kSystemProductServicesOverlayDir = "/system/product_services/overlay/";
-  static const char* kProductServicesOverlayDir = "/product_services/overlay";
+  static const char* kSystemSystemExtOverlayDir = "/system/system_ext/overlay/";
+  static const char* kSystemExtOverlayDir = "/system_ext/overlay";
   static const char* kSystemOdmOverlayDir = "/system/odm/overlay";
   static const char* kOdmOverlayDir = "/odm/overlay";
   static const char* kSystemOemOverlayDir = "/system/oem/overlay";
@@ -113,8 +134,8 @@ bool FileDescriptorWhitelist::IsAllowed(const std::string& path) const {
        || android::base::StartsWith(path, kVendorOverlayDir)
        || android::base::StartsWith(path, kSystemProductOverlayDir)
        || android::base::StartsWith(path, kProductOverlayDir)
-       || android::base::StartsWith(path, kSystemProductServicesOverlayDir)
-       || android::base::StartsWith(path, kProductServicesOverlayDir)
+       || android::base::StartsWith(path, kSystemSystemExtOverlayDir)
+       || android::base::StartsWith(path, kSystemExtOverlayDir)
        || android::base::StartsWith(path, kSystemOdmOverlayDir)
        || android::base::StartsWith(path, kOdmOverlayDir)
        || android::base::StartsWith(path, kSystemOemOverlayDir)
@@ -251,7 +272,7 @@ FileDescriptorInfo* FileDescriptorInfo::CreateFromFd(int fd, fail_fn_t fail_fn) 
   }
 
   if (!whitelist->IsAllowed(file_path)) {
-    fail_fn(std::string("Not whitelisted : ").append(file_path));
+    fail_fn(android::base::StringPrintf("Not whitelisted (%d): %s", fd, file_path.c_str()));
   }
 
   // File descriptor flags : currently on FD_CLOEXEC. We can set these
@@ -310,6 +331,11 @@ bool FileDescriptorInfo::RefersToSameFile() const {
 void FileDescriptorInfo::ReopenOrDetach(fail_fn_t fail_fn) const {
   if (is_sock) {
     return DetachSocket(fail_fn);
+  }
+
+  // Children can directly use the in-memory file created by ART through memfd_create.
+  if (IsArtMemfd(file_path)) {
+    return;
   }
 
   // NOTE: This might happen if the file was unlinked after being opened.
@@ -531,6 +557,10 @@ FileDescriptorTable::FileDescriptorTable(
 }
 
 void FileDescriptorTable::RestatInternal(std::set<int>& open_fds, fail_fn_t fail_fn) {
+  // ART creates a file through memfd for optimization purposes. We make sure
+  // there is at most one being created.
+  bool art_memfd_seen = false;
+
   // Iterate through the list of file descriptors we've already recorded
   // and check whether :
   //
@@ -561,6 +591,14 @@ void FileDescriptorTable::RestatInternal(std::set<int>& open_fds, fail_fn_t fail
       } else {
         // It's the same file. Nothing to do here. Move on to the next open
         // FD.
+      }
+
+      if (IsArtMemfd(it->second->file_path)) {
+        if (art_memfd_seen) {
+          fail_fn("ART fd already seen: " + it->second->file_path);
+        } else {
+          art_memfd_seen = true;
+        }
       }
 
       ++it;

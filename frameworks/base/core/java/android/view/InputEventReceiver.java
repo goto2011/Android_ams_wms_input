@@ -30,6 +30,7 @@ import java.lang.ref.WeakReference;
  * Provides a low-level mechanism for an application to receive input events.
  * @hide
  */
+// dg2: 类: 为应用程序提供一种低级机制来接收输入事件。
 public abstract class InputEventReceiver {
     private static final String TAG = "InputEventReceiver";
 
@@ -68,6 +69,8 @@ public abstract class InputEventReceiver {
 
         mInputChannel = inputChannel;
         mMessageQueue = looper.getQueue();
+		// dg2: 用应用消息队列 初始化 mReceiverPtr.
+		// nativeInit() 即 android_view_InputEventReceiver.cpp 的 nativeInit().
         mReceiverPtr = nativeInit(new WeakReference<InputEventReceiver>(this),
                 inputChannel, mMessageQueue);
 
@@ -183,6 +186,7 @@ public abstract class InputEventReceiver {
     // Called from native code.
     @SuppressWarnings("unused")
     @UnsupportedAppUsage
+	// dg2: 从native代码调用过来.
     private void dispatchInputEvent(int seq, InputEvent event) {
         mSeqMap.put(event.getSequenceNumber(), seq);
         onInputEvent(event);

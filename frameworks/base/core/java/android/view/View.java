@@ -13915,8 +13915,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @param event The motion event to be dispatched.
      * @return True if the event was handled by the view, false otherwise.
      */
+	// dg2: 分发触摸事件. 关键.
     public boolean dispatchTouchEvent(MotionEvent event) {
         // If the event should be handled by accessibility focus first.
+		// dg2: 盲人模式的处理.
         if (event.isTargetAccessibilityFocus()) {
             // We don't have focus or no virtual descendant has it, do not handle the event.
             if (!isAccessibilityFocusedViewOrHost()) {

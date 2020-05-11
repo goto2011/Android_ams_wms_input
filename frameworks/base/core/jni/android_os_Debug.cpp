@@ -34,7 +34,7 @@
 #include <vector>
 
 #include <android-base/logging.h>
-#include <bionic_malloc.h>
+#include <bionic/malloc.h>
 #include <debuggerd/client.h>
 #include <log/log.h>
 #include <utils/misc.h>
@@ -43,12 +43,14 @@
 #include <nativehelper/JNIHelp.h>
 #include <nativehelper/ScopedUtfChars.h>
 #include "jni.h"
+#include <dmabufinfo/dmabufinfo.h>
 #include <meminfo/procmeminfo.h>
 #include <meminfo/sysmeminfo.h>
 #include <memtrack/memtrack.h>
 #include <memunreachable/memunreachable.h>
 #include <android-base/strings.h>
 #include "android_os_Debug.h"
+#include <vintf/VintfObject.h>
 
 namespace android
 {
@@ -85,7 +87,8 @@ enum {
     // Dalvik other extra sections.
     HEAP_DALVIK_OTHER_LINEARALLOC,
     HEAP_DALVIK_OTHER_ACCOUNTING,
-    HEAP_DALVIK_OTHER_CODE_CACHE,
+    HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE,
+    HEAP_DALVIK_OTHER_APP_CODE_CACHE,
     HEAP_DALVIK_OTHER_COMPILER_METADATA,
     HEAP_DALVIK_OTHER_INDIRECT_REFERENCE_TABLE,
 
@@ -190,7 +193,8 @@ static int read_memtrack_memory(struct memtrack_proc* p, int pid,
 {
     int err = memtrack_proc_get(p, pid);
     if (err != 0) {
-        ALOGW("failed to get memory consumption info: %d", err);
+        // The memtrack HAL may not be available, do not log to avoid flooding
+        // logcat.
         return err;
     }
 
@@ -257,7 +261,13 @@ static void load_maps(int pid, stats_t* stats, bool* foundSwapPss)
             which_heap = HEAP_NATIVE;
         } else if (base::StartsWith(name, "[anon:libc_malloc]")) {
             which_heap = HEAP_NATIVE;
+        } else if (base::StartsWith(name, "[anon:scudo:")) {
+            which_heap = HEAP_NATIVE;
+        } else if (base::StartsWith(name, "[anon:GWP-ASan")) {
+            which_heap = HEAP_NATIVE;
         } else if (base::StartsWith(name, "[stack")) {
+            which_heap = HEAP_STACK;
+        } else if (base::StartsWith(name, "[anon:stack_and_tls:")) {
             which_heap = HEAP_STACK;
         } else if (base::EndsWith(name, ".so")) {
             which_heap = HEAP_SO;
@@ -278,9 +288,10 @@ static void load_maps(int pid, stats_t* stats, bool* foundSwapPss)
             is_swappable = true;
         } else if (base::EndsWith(name, ".vdex")) {
             which_heap = HEAP_DEX;
-            // Handle system@framework@boot and system/framework/boot
+            // Handle system@framework@boot and system/framework/boot|apex
             if ((strstr(name.c_str(), "@boot") != nullptr) ||
-                    (strstr(name.c_str(), "/boot"))) {
+                    (strstr(name.c_str(), "/boot") != nullptr) ||
+                    (strstr(name.c_str(), "/apex") != nullptr)) {
                 sub_heap = HEAP_DEX_BOOT_VDEX;
             } else {
                 sub_heap = HEAP_DEX_APP_VDEX;
@@ -291,9 +302,10 @@ static void load_maps(int pid, stats_t* stats, bool* foundSwapPss)
             is_swappable = true;
         } else if (base::EndsWith(name, ".art") || base::EndsWith(name, ".art]")) {
             which_heap = HEAP_ART;
-            // Handle system@framework@boot* and system/framework/boot*
+            // Handle system@framework@boot* and system/framework/boot|apex*
             if ((strstr(name.c_str(), "@boot") != nullptr) ||
-                    (strstr(name.c_str(), "/boot"))) {
+                    (strstr(name.c_str(), "/boot") != nullptr) ||
+                    (strstr(name.c_str(), "/apex") != nullptr)) {
                 sub_heap = HEAP_ART_BOOT;
             } else {
                 sub_heap = HEAP_ART_APP;
@@ -305,9 +317,18 @@ static void load_maps(int pid, stats_t* stats, bool* foundSwapPss)
                 which_heap = HEAP_GL_DEV;
             } else if (base::StartsWith(name, "/dev/ashmem/CursorWindow")) {
                 which_heap = HEAP_CURSOR;
+            } else if (base::StartsWith(name, "/dev/ashmem/jit-zygote-cache")) {
+                which_heap = HEAP_DALVIK_OTHER;
+                sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
             } else if (base::StartsWith(name, "/dev/ashmem")) {
                 which_heap = HEAP_ASHMEM;
             }
+        } else if (base::StartsWith(name, "/memfd:jit-cache")) {
+          which_heap = HEAP_DALVIK_OTHER;
+          sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
+        } else if (base::StartsWith(name, "/memfd:jit-zygote-cache")) {
+          which_heap = HEAP_DALVIK_OTHER;
+          sub_heap = HEAP_DALVIK_OTHER_ZYGOTE_CODE_CACHE;
         } else if (base::StartsWith(name, "[anon:")) {
             which_heap = HEAP_UNKNOWN;
             if (base::StartsWith(name, "[anon:dalvik-")) {
@@ -335,7 +356,7 @@ static void load_maps(int pid, stats_t* stats, bool* foundSwapPss)
                     sub_heap = HEAP_DALVIK_OTHER_INDIRECT_REFERENCE_TABLE;
                 } else if (base::StartsWith(name, "[anon:dalvik-jit-code-cache") ||
                         base::StartsWith(name, "[anon:dalvik-data-code-cache")) {
-                    sub_heap = HEAP_DALVIK_OTHER_CODE_CACHE;
+                    sub_heap = HEAP_DALVIK_OTHER_APP_CODE_CACHE;
                 } else if (base::StartsWith(name, "[anon:dalvik-CompilerMetadata")) {
                     sub_heap = HEAP_DALVIK_OTHER_COMPILER_METADATA;
                 } else {
@@ -544,6 +565,7 @@ enum {
     MEMINFO_VMALLOC_USED,
     MEMINFO_PAGE_TABLES,
     MEMINFO_KERNEL_STACK,
+    MEMINFO_KERNEL_RECLAIMABLE,
     MEMINFO_COUNT
 };
 
@@ -762,6 +784,76 @@ static jlong android_os_Debug_getFreeZramKb(JNIEnv* env, jobject clazz) {
     return zramFreeKb;
 }
 
+static jlong android_os_Debug_getIonHeapsSizeKb(JNIEnv* env, jobject clazz) {
+    jlong heapsSizeKb = 0;
+    uint64_t size;
+
+    if (meminfo::ReadIonHeapsSizeKb(&size)) {
+        heapsSizeKb = size;
+    }
+
+    return heapsSizeKb;
+}
+
+static jlong android_os_Debug_getIonPoolsSizeKb(JNIEnv* env, jobject clazz) {
+    jlong poolsSizeKb = 0;
+    uint64_t size;
+
+    if (meminfo::ReadIonPoolsSizeKb(&size)) {
+        poolsSizeKb = size;
+    }
+
+    return poolsSizeKb;
+}
+
+static jlong android_os_Debug_getIonMappedSizeKb(JNIEnv* env, jobject clazz) {
+    jlong ionPss = 0;
+    std::vector<dmabufinfo::DmaBuffer> dmabufs;
+
+    std::unique_ptr<DIR, int (*)(DIR*)> dir(opendir("/proc"), closedir);
+    if (!dir) {
+        LOG(ERROR) << "Failed to open /proc directory";
+        return false;
+    }
+
+    struct dirent* dent;
+    while ((dent = readdir(dir.get()))) {
+        if (dent->d_type != DT_DIR) continue;
+
+        int pid = atoi(dent->d_name);
+        if (pid == 0) {
+            continue;
+        }
+
+        if (!AppendDmaBufInfo(pid, &dmabufs, false)) {
+            LOG(ERROR) << "Failed to read maps for pid " << pid;
+        }
+    }
+
+    for (const dmabufinfo::DmaBuffer& buf : dmabufs) {
+        ionPss += buf.size() / 1024;
+    }
+
+    return ionPss;
+}
+
+static jboolean android_os_Debug_isVmapStack(JNIEnv *env, jobject clazz)
+{
+    static enum {
+        CONFIG_UNKNOWN,
+        CONFIG_SET,
+        CONFIG_UNSET,
+    } cfg_state = CONFIG_UNKNOWN;
+
+    if (cfg_state == CONFIG_UNKNOWN) {
+        const std::map<std::string, std::string> configs =
+            vintf::VintfObject::GetInstance()->getRuntimeInfo()->kernelConfigs();
+        std::map<std::string, std::string>::const_iterator it = configs.find("CONFIG_VMAP_STACK");
+        cfg_state = (it != configs.end() && it->second == "y") ? CONFIG_SET : CONFIG_UNSET;
+    }
+    return cfg_state == CONFIG_SET;
+}
+
 /*
  * JNI registration.
  */
@@ -805,6 +897,14 @@ static const JNINativeMethod gMethods[] = {
             (void*)android_os_Debug_getUnreachableMemory },
     { "getZramFreeKb", "()J",
             (void*)android_os_Debug_getFreeZramKb },
+    { "getIonHeapsSizeKb", "()J",
+            (void*)android_os_Debug_getIonHeapsSizeKb },
+    { "getIonPoolsSizeKb", "()J",
+            (void*)android_os_Debug_getIonPoolsSizeKb },
+    { "getIonMappedSizeKb", "()J",
+            (void*)android_os_Debug_getIonMappedSizeKb },
+    { "isVmapStack", "()Z",
+            (void*)android_os_Debug_isVmapStack },
 };
 
 int register_android_os_Debug(JNIEnv *env)

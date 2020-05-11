@@ -143,6 +143,7 @@ import java.util.concurrent.CountDownLatch;
  * {@hide}
  */
 @SuppressWarnings({"EmptyCatchBlock", "PointlessBooleanExpression"})
+// dg2: 类: ViewRoot 类.
 public final class ViewRootImpl implements ViewParent,
         View.AttachInfo.Callbacks, ThreadedRenderer.DrawCallbacks {
     private static final String TAG = "ViewRootImpl";
@@ -610,8 +611,10 @@ public final class ViewRootImpl implements ViewParent,
 
     private String mTag = TAG;
 
+	// dg2: 构造函数.
     public ViewRootImpl(Context context, Display display) {
         mContext = context;
+		// dg2: mWindowSession对象的初始化. 关键.
         mWindowSession = WindowManagerGlobal.getWindowSession();
         mDisplay = display;
         mBasePackageName = context.getBasePackageName();
@@ -781,6 +784,7 @@ public final class ViewRootImpl implements ViewParent,
     /**
      * We have one child
      */
+	// dg2: 把view放到ViewRoot中去. 关键.
     public void setView(View view, WindowManager.LayoutParams attrs, View panelParentView) {
         synchronized (this) {
             if (mView == null) {
@@ -885,6 +889,7 @@ public final class ViewRootImpl implements ViewParent,
                     mOrigWindowType = mWindowAttributes.type;
                     mAttachInfo.mRecomputeGlobalAttributes = true;
                     collectViewAttributes();
+					// dg2: 服务端过程. 先执行服务端的注册与监听.
                     res = mWindowSession.addToDisplay(mWindow, mSeq, mWindowAttributes,
                             getHostVisibility(), mDisplay.getDisplayId(), mTmpFrame,
                             mAttachInfo.mContentInsets, mAttachInfo.mStableInsets,
@@ -971,11 +976,13 @@ public final class ViewRootImpl implements ViewParent,
                     mInputQueueCallback =
                         ((RootViewSurfaceTaker)view).willYouTakeTheInputQueue();
                 }
+				// dg2: 客户端过程. 再执行客户端的注册与监听.
                 if (mInputChannel != null) {
                     if (mInputQueueCallback != null) {
                         mInputQueue = new InputQueue();
                         mInputQueueCallback.onInputQueueCreated(mInputQueue);
                     }
+					// dg2: 以客户端InputChannel与当前应用的Looper作为参数，初始化 WindowInputEventReceiver.
                     mInputEventReceiver = new WindowInputEventReceiver(mInputChannel,
                             Looper.myLooper());
                 }
@@ -993,7 +1000,10 @@ public final class ViewRootImpl implements ViewParent,
                 }
 
                 // Set up the input pipeline.
+				// dg2: 创建Input管道.
                 CharSequence counterSuffix = attrs.getTitle();
+				// dg2: ViewPostImeInputStage EarlyPostImeInputStage NativePreImeInputStage
+				// 是三个入口, 以将不同类型的事件进入流水线.
                 mSyntheticInputStage = new SyntheticInputStage();
                 InputStage viewPostImeStage = new ViewPostImeInputStage(mSyntheticInputStage);
                 InputStage nativePostImeStage = new NativePostImeInputStage(viewPostImeStage,
@@ -4819,6 +4829,7 @@ public final class ViewRootImpl implements ViewParent,
      * @param inTouchMode Whether we want to be in touch mode.
      * @return True if the touch mode changed and focus changed was changed as a result
      */
+	// dg2: 确认触摸模式. 
     @UnsupportedAppUsage
     boolean ensureTouchMode(boolean inTouchMode) {
         if (DBG) Log.d("touchmode", "ensureTouchMode(" + inTouchMode + "), current "
@@ -4826,6 +4837,7 @@ public final class ViewRootImpl implements ViewParent,
         if (mAttachInfo.mInTouchMode == inTouchMode) return false;
 
         // tell the window manager
+		// dg2: 触摸模式改变需要知会 wms.
         try {
             mWindowSession.setInTouchMode(inTouchMode);
         } catch (RemoteException e) {
@@ -5315,6 +5327,7 @@ public final class ViewRootImpl implements ViewParent,
     /**
      * Performs early processing of post-ime input events.
      */
+	// dg2: 类: 处理流水线 Step1.
     final class EarlyPostImeInputStage extends InputStage {
         public EarlyPostImeInputStage(InputStage next) {
             super(next);
@@ -5325,6 +5338,7 @@ public final class ViewRootImpl implements ViewParent,
             if (q.mEvent instanceof KeyEvent) {
                 return processKeyEvent(q);
             } else if (q.mEvent instanceof MotionEvent) {
+				// dg2: 关键.
                 return processMotionEvent(q);
             }
             return FORWARD;
@@ -5349,15 +5363,18 @@ public final class ViewRootImpl implements ViewParent,
             return FORWARD;
         }
 
+		// dg2: 处理触摸事件.
         private int processMotionEvent(QueuedInputEvent q) {
             final MotionEvent event = (MotionEvent) q.mEvent;
 
+			// dg2: 如果是轨迹球事件, 调用对应的处理.
             if (event.isFromSource(InputDevice.SOURCE_CLASS_POINTER)) {
                 return processPointerEvent(q);
             }
 
             // If the motion event is from an absolute position device, exit touch mode
             final int action = event.getActionMasked();
+			// dg2: 仅处理down事件和scroll事件
             if (action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_SCROLL) {
                 if (event.isFromSource(InputDevice.SOURCE_CLASS_POSITION)) {
                     ensureTouchMode(false);
@@ -5411,6 +5428,7 @@ public final class ViewRootImpl implements ViewParent,
     /**
      * Delivers post-ime input events to a native activity.
      */
+	// dg2: 事件处理流水线 step2.
     final class NativePostImeInputStage extends AsyncInputStage
             implements InputQueue.FinishedInputEventCallback {
         public NativePostImeInputStage(InputStage next, String traceCounter) {
@@ -5419,6 +5437,7 @@ public final class ViewRootImpl implements ViewParent,
 
         @Override
         protected int onProcess(QueuedInputEvent q) {
+			// dg2: 如果有事件等待被处理，则推迟当前事件的处理（实现异步）。否则直接进入下一个阶段.
             if (mInputQueue != null) {
                 mInputQueue.sendInputEvent(q.mEvent, q, false, this);
                 return DEFER;
@@ -5440,6 +5459,7 @@ public final class ViewRootImpl implements ViewParent,
     /**
      * Delivers post-ime input events to the view hierarchy.
      */
+	// dg2: 事件处理流水线 step3.
     final class ViewPostImeInputStage extends InputStage {
         public ViewPostImeInputStage(InputStage next) {
             super(next);
@@ -5452,6 +5472,7 @@ public final class ViewRootImpl implements ViewParent,
             } else {
                 final int source = q.mEvent.getSource();
                 if ((source & InputDevice.SOURCE_CLASS_POINTER) != 0) {
+					// dg2: 触摸事件走这里.
                     return processPointerEvent(q);
                 } else if ((source & InputDevice.SOURCE_CLASS_TRACKBALL) != 0) {
                     return processTrackballEvent(q);
@@ -5644,11 +5665,13 @@ public final class ViewRootImpl implements ViewParent,
             return FORWARD;
         }
 
+		// dg2: 处理触摸事件.
         private int processPointerEvent(QueuedInputEvent q) {
             final MotionEvent event = (MotionEvent)q.mEvent;
 
             mAttachInfo.mUnbufferedDispatchRequested = false;
             mAttachInfo.mHandlingPointerEvent = true;
+			// dg2: mView 即 当前Window的根View, 也就是 DecorView.
             boolean handled = mView.dispatchPointerEvent(event);
             maybeUpdatePointerIcon(event);
             maybeUpdateTooltip(event);
@@ -7580,6 +7603,9 @@ public final class ViewRootImpl implements ViewParent,
     }
 
     @UnsupportedAppUsage
+	// dg2: 将接收到的事件加入了mPendingInutEvent链表的头部. 关键.
+	// 因为当发生事件插入的时候我们不能依赖事件的时间戳是准确的，因此必须让最新收到的事件先进行处理。
+	// Input事件需要立即处理. processImmediately = true.
     void enqueueInputEvent(InputEvent event,
             InputEventReceiver receiver, int flags, boolean processImmediately) {
         QueuedInputEvent q = obtainQueuedInputEvent(event, receiver, flags);
@@ -7602,6 +7628,7 @@ public final class ViewRootImpl implements ViewParent,
                 mPendingInputEventCount);
 
         if (processImmediately) {
+			// dg2: 关键.
             doProcessInputEvents();
         } else {
             scheduleProcessInputEvents();
@@ -7617,6 +7644,7 @@ public final class ViewRootImpl implements ViewParent,
         }
     }
 
+	// dg2: 处理事件. 关键.
     void doProcessInputEvents() {
         // Deliver all pending input events in the queue.
         while (mPendingInputEventHead != null) {
@@ -7641,6 +7669,7 @@ public final class ViewRootImpl implements ViewParent,
             }
             mChoreographer.mFrameInfo.updateInputEventTime(eventTime, oldestEventTime);
 
+			// dg2: 关键.
             deliverInputEvent(q);
         }
 
@@ -7652,6 +7681,7 @@ public final class ViewRootImpl implements ViewParent,
         }
     }
 
+	// dg2: 进入一个流水线过程来处理事件. 关键.
     private void deliverInputEvent(QueuedInputEvent q) {
         Trace.asyncTraceBegin(Trace.TRACE_TAG_VIEW, "deliverInputEvent",
                 q.mEvent.getSequenceNumber());
@@ -7661,8 +7691,10 @@ public final class ViewRootImpl implements ViewParent,
 
         InputStage stage;
         if (q.shouldSendToSynthesizer()) {
+			// dg2: mSyntheticInputStage, 同步.
             stage = mSyntheticInputStage;
         } else {
+			// dg2: mFirstPostImeInputStage, 带输入法窗口; mFirstInputStage, 不带输入法窗口.
             stage = q.shouldSkipIme() ? mFirstPostImeInputStage : mFirstInputStage;
         }
 
@@ -7776,6 +7808,7 @@ public final class ViewRootImpl implements ViewParent,
         }
 
         @Override
+		// dg2: java层事件处理.
         public void onInputEvent(InputEvent event) {
             Trace.traceBegin(Trace.TRACE_TAG_VIEW, "processInputEventForCompatibility");
             List<InputEvent> processedEvents;

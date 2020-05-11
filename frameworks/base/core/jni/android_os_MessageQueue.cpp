@@ -105,6 +105,7 @@ void NativeMessageQueue::raiseException(JNIEnv* env, const char* msg, jthrowable
     }
 }
 
+// dg2: 消息队列的循环体 pollOnce. 关键.
 void NativeMessageQueue::pollOnce(JNIEnv* env, jobject pollObj, int timeoutMillis) {
     mPollEnv = env;
     mPollObj = pollObj;

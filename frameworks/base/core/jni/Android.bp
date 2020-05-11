@@ -87,6 +87,7 @@ cc_library_shared {
         "android_text_Hyphenator.cpp",
         "android_os_Debug.cpp",
         "android_os_GraphicsEnvironment.cpp",
+        "android_os_HidlMemory.cpp",
         "android_os_HidlSupport.cpp",
         "android_os_HwBinder.cpp",
         "android_os_HwBlob.cpp",
@@ -169,7 +170,6 @@ cc_library_shared {
         "android_media_AudioVolumeGroups.cpp",
         "android_media_AudioVolumeGroupCallback.cpp",
         "android_media_DeviceCallback.cpp",
-        "android_media_JetPlayer.cpp",
         "android_media_MediaMetricsJNI.cpp",
         "android_media_MicrophoneInfo.cpp",
         "android_media_midi.cpp",
@@ -207,6 +207,8 @@ cc_library_shared {
         "com_android_internal_os_AtomicDirectory.cpp",
         "com_android_internal_os_ClassLoaderFactory.cpp",
         "com_android_internal_os_FuseAppLoop.cpp",
+        "com_android_internal_os_KernelCpuUidBpfMapReader.cpp",
+        "com_android_internal_os_KernelSingleUidTimeReader.cpp",
         "com_android_internal_os_Zygote.cpp",
         "com_android_internal_os_ZygoteInit.cpp",
         "com_android_internal_util_VirtualRefBasePtr.cpp",
@@ -218,10 +220,6 @@ cc_library_shared {
     ],
 
     include_dirs: [
-        // we need to access the private Bionic header
-        // <bionic_tls.h> in com_google_android_gles_jni_GLImpl.cpp
-        "bionic/libc/private",
-
         "external/skia/include/private",
         "external/skia/src/codec",
         "external/skia/src/core",
@@ -233,8 +231,12 @@ cc_library_shared {
         "system/media/private/camera/include",
     ],
 
+    header_libs: ["bionic_libc_platform_headers"],
+
     static_libs: [
         "libasync_safe",
+        "libbinderthreadstateutils",
+        "libdmabufinfo",
         "libgif",
         "libseccomp_policy",
         "libgrallocusage",
@@ -281,6 +283,7 @@ cc_library_shared {
         "libmediametrics",
         "libmeminfo",
         "libaudioclient",
+        "libaudiofoundation",
         "libaudiopolicy",
         "libjpeg",
         "libusbhost",
@@ -296,14 +299,13 @@ cc_library_shared {
         "libnativeloader_lazy",
         "libmemunreachable",
         "libhidlbase",
-        "libhidltransport",
-        "libhwbinder",
         "libvintf",
         "libnativewindow",
         "libhwui",
         "libdl",
         "libdl_android",
         "libstatslog",
+        "libtimeinstate",
         "server_configurable_flags",
     ],
 
@@ -324,4 +326,10 @@ cc_library_shared {
         // GraphicsJNI.h includes hwui headers
         "libhwui",
     ],
+
+    product_variables: {
+        experimental_mte: {
+            cflags: ["-DANDROID_EXPERIMENTAL_MTE"],
+        },
+    },
 }

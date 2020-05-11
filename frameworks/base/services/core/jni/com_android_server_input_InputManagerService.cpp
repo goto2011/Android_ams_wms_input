@@ -1409,6 +1409,7 @@ static void handleInputChannelDisposed(JNIEnv* env,
     im->unregisterInputChannel(env, inputChannel);
 }
 
+// dg2: 注册 InputChannel. 关键.
 static void nativeRegisterInputChannel(JNIEnv* env, jclass /* clazz */,
         jlong ptr, jobject inputChannelObj, jint displayId) {
     NativeInputManager* im = reinterpret_cast<NativeInputManager*>(ptr);

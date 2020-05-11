@@ -121,6 +121,7 @@ static jobject android_view_InputChannel_createInputChannel(JNIEnv* env,
     return inputChannelObj;
 }
 
+// dg2: 打开 InputChannel 通道对.
 static jobjectArray android_view_InputChannel_nativeOpenInputChannelPair(JNIEnv* env,
         jclass clazz, jstring nameObj) {
     ScopedUtfChars nameChars(env, nameObj);

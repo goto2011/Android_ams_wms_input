@@ -19,8 +19,7 @@ package android.os;
 import android.annotation.IntDef;
 import android.annotation.NonNull;
 import android.annotation.TestApi;
-import android.annotation.UnsupportedAppUsage;
-import android.os.MessageQueueProto;
+import android.compat.annotation.UnsupportedAppUsage;
 import android.util.Log;
 import android.util.Printer;
 import android.util.SparseArray;
@@ -493,6 +492,7 @@ public final class MessageQueue {
      *
      * @hide
      */
+    @UnsupportedAppUsage
     @TestApi
     public int postSyncBarrier() {
         return postSyncBarrier(SystemClock.uptimeMillis());
@@ -537,6 +537,7 @@ public final class MessageQueue {
      *
      * @hide
      */
+    @UnsupportedAppUsage
     @TestApi
     public void removeSyncBarrier(int token) {
         // Remove a sync barrier token from the queue.
@@ -652,6 +653,23 @@ public final class MessageQueue {
         }
     }
 
+    boolean hasEqualMessages(Handler h, int what, Object object) {
+        if (h == null) {
+            return false;
+        }
+
+        synchronized (this) {
+            Message p = mMessages;
+            while (p != null) {
+                if (p.target == h && p.what == what && (object == null || object.equals(p.obj))) {
+                    return true;
+                }
+                p = p.next;
+            }
+            return false;
+        }
+    }
+
     @UnsupportedAppUsage
     boolean hasMessages(Handler h, Runnable r, Object object) {
         if (h == null) {
@@ -721,6 +739,40 @@ public final class MessageQueue {
         }
     }
 
+    void removeEqualMessages(Handler h, int what, Object object) {
+        if (h == null) {
+            return;
+        }
+
+        synchronized (this) {
+            Message p = mMessages;
+
+            // Remove all messages at front.
+            while (p != null && p.target == h && p.what == what
+                   && (object == null || object.equals(p.obj))) {
+                Message n = p.next;
+                mMessages = n;
+                p.recycleUnchecked();
+                p = n;
+            }
+
+            // Remove all messages after front.
+            while (p != null) {
+                Message n = p.next;
+                if (n != null) {
+                    if (n.target == h && n.what == what
+                        && (object == null || object.equals(n.obj))) {
+                        Message nn = n.next;
+                        n.recycleUnchecked();
+                        p.next = nn;
+                        continue;
+                    }
+                }
+                p = n;
+            }
+        }
+    }
+
     void removeMessages(Handler h, Runnable r, Object object) {
         if (h == null || r == null) {
             return;
@@ -755,6 +807,41 @@ public final class MessageQueue {
         }
     }
 
+    void removeEqualMessages(Handler h, Runnable r, Object object) {
+        if (h == null || r == null) {
+            return;
+        }
+
+        synchronized (this) {
+            Message p = mMessages;
+
+            // Remove all messages at front.
+            while (p != null && p.target == h && p.callback == r
+                   && (object == null || object.equals(p.obj))) {
+                Message n = p.next;
+                mMessages = n;
+                p.recycleUnchecked();
+                p = n;
+            }
+
+            // Remove all messages after front.
+            while (p != null) {
+                Message n = p.next;
+                if (n != null) {
+                    if (n.target == h && n.callback == r
+                        && (object == null || object.equals(n.obj))) {
+                        Message nn = n.next;
+                        n.recycleUnchecked();
+                        p.next = nn;
+                        continue;
+                    }
+                }
+                p = n;
+            }
+        }
+    }
+
+
     void removeCallbacksAndMessages(Handler h, Object object) {
         if (h == null) {
             return;
@@ -777,6 +864,39 @@ public final class MessageQueue {
                 Message n = p.next;
                 if (n != null) {
                     if (n.target == h && (object == null || n.obj == object)) {
+                        Message nn = n.next;
+                        n.recycleUnchecked();
+                        p.next = nn;
+                        continue;
+                    }
+                }
+                p = n;
+            }
+        }
+    }
+
+    void removeCallbacksAndEqualMessages(Handler h, Object object) {
+        if (h == null) {
+            return;
+        }
+
+        synchronized (this) {
+            Message p = mMessages;
+
+            // Remove all messages at front.
+            while (p != null && p.target == h
+                    && (object == null || object.equals(p.obj))) {
+                Message n = p.next;
+                mMessages = n;
+                p.recycleUnchecked();
+                p = n;
+            }
+
+            // Remove all messages after front.
+            while (p != null) {
+                Message n = p.next;
+                if (n != null) {
+                    if (n.target == h && (object == null || object.equals(n.obj))) {
                         Message nn = n.next;
                         n.recycleUnchecked();
                         p.next = nn;

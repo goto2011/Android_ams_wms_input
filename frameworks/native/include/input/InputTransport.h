@@ -55,8 +55,15 @@ class Parcel;
  * compiler. When a new field is added to the struct, the corresponding change
  * in StructLayout_test should be made.
  */
+// dg2: 类: 用于发送输入事件和相关信号的中间表示。
+// 注意，此结构用于IPC，因此其布局在64位和32位进程上必须相同。 在StructLayout_test.cpp中对此进行了测试。
+// 由于该结构必须与8字节边界对齐，因此在定义的字段之间可能存在未初始化的字节。 
+// 应该通过在结构中添加“空”字段来显式说明此填充数据。 在通过套接字发送结构之前，此数据的内存设置为零。 
+// 添加显式字段可确保编译器不会优化memset。 
+// 将新字段添加到该结构时，应在StructLayout_test中进行相应的更改。
 struct InputMessage {
     enum {
+		// dg2: 类型: 按键事件, 触摸事件, 事件处理结束标志.
         TYPE_KEY = 1,
         TYPE_MOTION = 2,
         TYPE_FINISHED = 3,
@@ -307,6 +314,7 @@ private:
 /*
  * Consumes input events from an input channel.
  */
+// dg2: 类: 消费来自 inputChannel 的事件.
 class InputConsumer {
 public:
     /* Creates a consumer associated with an input channel. */

@@ -90,6 +90,7 @@ public final class InputChannel implements Parcelable {
      * server channel and should be used to publish input events.  The second channel
      * is designated as the client channel and should be used to consume input events.
      */
+	// dg2: 创建 InputChannel 对.
     public static InputChannel[] openInputChannelPair(String name) {
         if (name == null) {
             throw new IllegalArgumentException("name must not be null");
@@ -98,6 +99,7 @@ public final class InputChannel implements Parcelable {
         if (DEBUG) {
             Slog.d(TAG, "Opening input channel pair '" + name + "'");
         }
+		// dg2: 调用的是 android_view_InputChannel_nativeOpenInputChannelPair().
         return nativeOpenInputChannelPair(name);
     }
 

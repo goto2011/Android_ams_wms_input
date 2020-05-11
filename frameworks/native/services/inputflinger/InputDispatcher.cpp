@@ -2029,7 +2029,7 @@ void InputDispatcher::pokeUserActivityLocked(const EventEntry* eventEntry) {
     commandEntry->userActivityEventType = eventType;
 }
 
-// dg2: 对连接的状态是否正常进行检测.
+// dg2: 对连接的状态是否正常进行检测. 关键.
 void InputDispatcher::prepareDispatchCycleLocked(nsecs_t currentTime,
         const sp<Connection>& connection, EventEntry* eventEntry, const InputTarget* inputTarget) {
     if (ATRACE_ENABLED()) {
@@ -2116,10 +2116,12 @@ void InputDispatcher::enqueueDispatchEntriesLocked(nsecs_t currentTime,
 
     // If the outbound queue was previously empty, start the dispatch cycle going.
     if (wasEmpty && !connection->outboundQueue.isEmpty()) {
+		// dg2: 准备工作完成, 正式开始分发事件. 关键.
         startDispatchCycleLocked(currentTime, connection);
     }
 }
 
+// dg2: 事件入队列.
 void InputDispatcher::enqueueDispatchEntryLocked(
         const sp<Connection>& connection, EventEntry* eventEntry, const InputTarget* inputTarget,
         int32_t dispatchMode) {
@@ -2162,6 +2164,7 @@ void InputDispatcher::enqueueDispatchEntryLocked(
         break;
     }
 
+	// dg2: 重新封装触摸事件的 dispatchEntry.
     case EventEntry::TYPE_MOTION: {
         MotionEntry* motionEntry = static_cast<MotionEntry*>(eventEntry);
         if (dispatchMode & InputTarget::FLAG_DISPATCH_AS_OUTSIDE) {
@@ -2218,6 +2221,7 @@ void InputDispatcher::enqueueDispatchEntryLocked(
     }
 
     // Enqueue the dispatch entry.
+	// dg2: 加入到了connection维护的outboundQueue中。
     connection->outboundQueue.enqueueAtTail(dispatchEntry);
     traceOutboundQueueLength(connection);
 
@@ -2250,6 +2254,7 @@ void InputDispatcher::dispatchPointerDownOutsideFocus(uint32_t source, int32_t a
     commandEntry->newToken = newToken;
 }
 
+// dg2: 正式开始分发事件. 关键.
 void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
         const sp<Connection>& connection) {
     if (ATRACE_ENABLED()) {
@@ -2291,6 +2296,7 @@ void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
             const PointerCoords* usingCoords = motionEntry->pointerCoords;
 
             // Set the X and Y offset depending on the input source.
+			// dg2: 对事件的坐标进行缩放.
             float xOffset, yOffset;
             if ((motionEntry->source & AINPUT_SOURCE_CLASS_POINTER)
                     && !(dispatchEntry->targetFlags & InputTarget::FLAG_ZERO_COORDS)) {
@@ -2320,6 +2326,7 @@ void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
             }
 
             // Publish the motion event.
+			// dg2: 调用 InputPublisher的 publishMotionEvent(), 发布事件.
             status = connection->inputPublisher.publishMotionEvent(dispatchEntry->seq,
                     motionEntry->deviceId, motionEntry->source, motionEntry->displayId,
                     dispatchEntry->resolvedAction, motionEntry->actionButton,
@@ -2373,6 +2380,7 @@ void InputDispatcher::startDispatchCycleLocked(nsecs_t currentTime,
     }
 }
 
+// dg2: 本次分发流程结束.
 void InputDispatcher::finishDispatchCycleLocked(nsecs_t currentTime,
         const sp<Connection>& connection, uint32_t seq, bool handled) {
 #if DEBUG_DISPATCH_CYCLE
@@ -2430,6 +2438,7 @@ void InputDispatcher::releaseDispatchEntry(DispatchEntry* dispatchEntry) {
     delete dispatchEntry;
 }
 
+// dg2: 收到服务器端的socket事件时的处理函数. 关键.
 int InputDispatcher::handleReceiveCallback(int fd, int events, void* data) {
     InputDispatcher* d = static_cast<InputDispatcher*>(data);
 
@@ -3926,7 +3935,8 @@ void InputDispatcher::dumpMonitors(std::string& dump, const std::vector<Monitor>
     }
 }
 
-// dg2: 由 inputChannel构造 connection对象, 并加入到 mConnectionsByFd中, 以Fd为索引。
+// dg2: 向InputDispatcher注册了我们创建好的 InputChannel服务端。
+// 将 InputChannel加入到 mConnectionsByFd中, 以Fd为索引。
 status_t InputDispatcher::registerInputChannel(const sp<InputChannel>& inputChannel,
         int32_t displayId) {
 #if DEBUG_REGISTRATION
@@ -3949,10 +3959,14 @@ status_t InputDispatcher::registerInputChannel(const sp<InputChannel>& inputChan
         mConnectionsByFd.add(fd, connection);
         mInputChannelsByToken[inputChannel->getToken()] = inputChannel;
 
+		// dg2: 调用mLooper的addFd在Native Looper中设置自定义fd进行监听，
+		// 传入了handleReceiveCallback()函数作为参数.
+		// 这样一来，在服务端收到消息时就会进行回调。
         mLooper->addFd(fd, 0, ALOOPER_EVENT_INPUT, handleReceiveCallback, this);
     } // release lock
 
     // Wake the looper because some connections have changed.
+	// dg2: 激活 looper.
     mLooper->wake();
     return OK;
 }

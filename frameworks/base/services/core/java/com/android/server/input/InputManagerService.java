@@ -558,6 +558,7 @@ public class InputManagerService extends IInputManager.Stub
         }
         inputChannel.setToken(token);
 
+		// dg2: 调用的是 nativeRegisterInputChannel().
         nativeRegisterInputChannel(mPtr, inputChannel, Display.INVALID_DISPLAY);
     }
 

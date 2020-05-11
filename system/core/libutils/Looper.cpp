@@ -14,7 +14,9 @@
 #define DEBUG_CALLBACKS 0
 
 #include <utils/Looper.h>
+
 #include <sys/eventfd.h>
+#include <cinttypes>
 
 namespace android {
 
@@ -286,7 +288,7 @@ int Looper::pollInner(int timeoutMillis) {
     ALOGD("%p ~ pollOnce - handling events from %d fds", this, eventCount);
 #endif
 
-	// dg2: 遍历收到的唤醒events, 一个一个进行处理.
+	// dg2: 遍历返回的事件, 一个一个进行处理.
     for (int i = 0; i < eventCount; i++) {
         int fd = eventItems[i].data.fd;
         uint32_t epollEvents = eventItems[i].events;
@@ -294,17 +296,17 @@ int Looper::pollInner(int timeoutMillis) {
         if (fd == mWakeEventFd.get()) {
 			// dg2: 判断 events 标志是否正确.
             if (epollEvents & EPOLLIN) {
-				// dg2: 如果都满足条件, 则调用 awaken()从FD中读取数据并清零.
-				// 注意, 对于读到的数据并不做处理, 因为并不care这个数据. 
-				// 这个mWakeEventFd的唯一目的就是解除阻塞，现在目的达到了，只要重置它以便下一次使用就可以了。
+				// dg2: 如果对应的fd为唤醒专用的mWakeEventFd，执行awoken()函数清空管道，
+				// 因为这个事件的作用只是为了唤醒Looper对新消息进行处理。
                 awoken();
             } else {
                 ALOGW("Ignoring unexpected epoll events 0x%x on wake event fd.", epollEvents);
             }
         } else {
-			// dg2: 如果不是的话，说明是系统调用addFd()方法设置的自定义fd.下面是对它的处理.
-			// mRequests 是我们在addFd()方法一并注册的以fd为key，Request为value的映射表。
-			// 从 mRequests中以fd为key找到对应的request对象.
+			// dg2: 如果不是mWakeEventFd，说明是我们之前通过addFd()函数添加的自定义fd，
+			// 我们需要对这个event进行处理，处理函数为pushResponse().
+			// 之前在addFd()中, 以fd为key，Request为value, 生成 mRequest映射表。此处取出处理即可.
+			// request信息包含 callback, 也就是 NativeInputEventReceiver对象。
             ssize_t requestIndex = mRequests.indexOfKey(fd);
             if (requestIndex >= 0) {
                 int events = 0;
@@ -312,7 +314,7 @@ int Looper::pollInner(int timeoutMillis) {
                 if (epollEvents & EPOLLOUT) events |= EVENT_OUTPUT;
                 if (epollEvents & EPOLLERR) events |= EVENT_ERROR;
                 if (epollEvents & EPOLLHUP) events |= EVENT_HANGUP;
-				// dg2: 找到request之后，调用pushResponse()去建立response
+				// dg2: 将request对象包装成了一个response，然后存入了mResponses中等待后面的处理。
                 pushResponse(events, mRequests.valueAt(requestIndex));
             } else {
                 ALOGW("Ignoring unexpected epoll events 0x%x on fd %d that is "
@@ -379,7 +381,9 @@ Done: ;
             // Invoke the callback.  Note that the file descriptor may be closed by
             // the callback (and potentially even reused) before the function returns so
             // we need to be a little careful when removing the file descriptor afterwards.
+
 			// dg2: 调用了request.callback->handleEvent()方法进行回调.
+			// callback 即 NativeInputEventReceiver对象.
             int callbackResult = response.request.callback->handleEvent(fd, events, data);
 			// dg2: 如果该回调返回0，则取消这个fd的注册。
             if (callbackResult == 0) {
@@ -460,7 +464,7 @@ int Looper::addFd(int fd, int ident, int events, Looper_callbackFunc callback, v
     return addFd(fd, ident, events, callback ? new SimpleLooperCallback(callback) : nullptr, data);
 }
 
-// dg2: 注册自定义fd. 保存request并使用epoll_ctl系统调用注册fd的监听。
+// dg2: 注册自 fd. 保存 request并使用epoll_ctl系统调用注册fd的监听。关键.
 int Looper::addFd(int fd, int ident, int events, const sp<LooperCallback>& callback, void* data) {
 #if DEBUG_CALLBACKS
     ALOGD("%p ~ addFd - fd=%d, ident=%d, events=0x%x, callback=%p, data=%p", this, fd, ident,

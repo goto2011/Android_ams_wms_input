@@ -156,6 +156,7 @@ class Session extends IWindowSession.Stub implements IBinder.DeathRecipient {
             Rect outStableInsets, Rect outOutsets,
             DisplayCutout.ParcelableWrapper outDisplayCutout, InputChannel outInputChannel,
             InsetsState outInsetsState) {
+		// dg2: mService 即 WindowManagerService.
         return mService.addWindow(this, window, seq, attrs, viewVisibility, displayId, outFrame,
                 outContentInsets, outStableInsets, outOutsets, outDisplayCutout, outInputChannel,
                 outInsetsState);

@@ -143,6 +143,7 @@ status_t NativeInputEventReceiver::finishInputEvent(uint32_t seq, bool handled) 
     return status;
 }
 
+// dg2: 将客户端的InputChannel保存的Fd加入到了Native Looper中进行监听，对返回的消息进行处理.
 void NativeInputEventReceiver::setFdEvents(int events) {
     if (mFdEvents != events) {
         mFdEvents = events;
@@ -155,6 +156,7 @@ void NativeInputEventReceiver::setFdEvents(int events) {
     }
 }
 
+// dg2: 接收到事件后, 处理事件. 关键.
 int NativeInputEventReceiver::handleEvent(int receiveFd, int events, void* data) {
     if (events & (ALOOPER_EVENT_ERROR | ALOOPER_EVENT_HANGUP)) {
         // This error typically occurs when the publisher has closed the input channel
@@ -169,6 +171,7 @@ int NativeInputEventReceiver::handleEvent(int receiveFd, int events, void* data)
 
     if (events & ALOOPER_EVENT_INPUT) {
         JNIEnv* env = AndroidRuntime::getJNIEnv();
+		// dg2: 消费事件. 关键. 
         status_t status = consumeEvents(env, false /*consumeBatches*/, -1, NULL);
         mMessageQueue->raiseAndClearException(env, "handleReceiveCallback");
         return status == OK || status == NO_MEMORY ? 1 : 0;
@@ -215,6 +218,7 @@ int NativeInputEventReceiver::handleEvent(int receiveFd, int events, void* data)
     return 1;
 }
 
+// dg2: 消费事件. 关键.
 status_t NativeInputEventReceiver::consumeEvents(JNIEnv* env,
         bool consumeBatches, nsecs_t frameTime, bool* outConsumedBatch) {
     if (kDebugDispatchCycle) {
@@ -232,10 +236,12 @@ status_t NativeInputEventReceiver::consumeEvents(JNIEnv* env,
 
     ScopedLocalRef<jobject> receiverObj(env, NULL);
     bool skipCallbacks = false;
+	// dg2: 无限循环.
     for (;;) {
         uint32_t seq;
         InputEvent* inputEvent;
-        status_t status = mInputConsumer.consume(&mInputEventFactory,
+		// dg2: 接收并将原始的事件转换为分发过程中标准的 MotionEvent.
+        status_t status = 	mInputConsumer.consume(&mInputEventFactory,
                 consumeBatches, frameTime, &seq, &inputEvent);
         if (status) {
             if (status == WOULD_BLOCK) {
@@ -256,6 +262,8 @@ status_t NativeInputEventReceiver::consumeEvents(JNIEnv* env,
                         ALOGD("channel '%s' ~ Dispatching batched input event pending notification.",
                                 getInputChannelName().c_str());
                     }
+					// dg2: 调用java层的 InputEventReceiver.dispatchInputEvent().
+					// 从这里，我们从Native层跨越到了java层。
                     env->CallVoidMethod(receiverObj.get(),
                             gInputEventReceiverClassInfo.dispatchBatchedInputEventPending);
                     if (env->ExceptionCheck()) {
@@ -332,7 +340,7 @@ status_t NativeInputEventReceiver::consumeEvents(JNIEnv* env,
     }
 }
 
-
+// dg2: 创建 NativeInputEventReceiver对象，并调用initialize()方法进行初始化.
 static jlong nativeInit(JNIEnv* env, jclass clazz, jobject receiverWeak,
         jobject inputChannelObj, jobject messageQueueObj) {
     sp<InputChannel> inputChannel = android_view_InputChannel_getInputChannel(env,
@@ -350,6 +358,7 @@ static jlong nativeInit(JNIEnv* env, jclass clazz, jobject receiverWeak,
 
     sp<NativeInputEventReceiver> receiver = new NativeInputEventReceiver(env,
             receiverWeak, inputChannel, messageQueue);
+	// dg2: 客户端(事件接受者)初始化.关键.
     status_t status = receiver->initialize();
     if (status) {
         String8 message;

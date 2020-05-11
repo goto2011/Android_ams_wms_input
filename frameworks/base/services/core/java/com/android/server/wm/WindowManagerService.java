@@ -1237,6 +1237,7 @@ public class WindowManagerService extends IWindowManager.Stub
         return false;
     }
 
+	// dg2: window add.
     public int addWindow(Session session, IWindow client, int seq,
             LayoutParams attrs, int viewVisibility, int displayId, Rect outFrame,
             Rect outContentInsets, Rect outStableInsets, Rect outOutsets,
@@ -1457,6 +1458,7 @@ public class WindowManagerService extends IWindowManager.Stub
             final boolean openInputChannels = (outInputChannel != null
                     && (attrs.inputFeatures & INPUT_FEATURE_NO_INPUT_CHANNEL) == 0);
             if  (openInputChannels) {
+				// dg2: 初始化 InputChannel. 关键.
                 win.openInputChannel(outInputChannel);
             }
 

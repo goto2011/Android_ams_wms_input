@@ -18,7 +18,7 @@ package android.os;
 
 import android.annotation.NonNull;
 import android.annotation.Nullable;
-import android.annotation.UnsupportedAppUsage;
+import android.compat.annotation.UnsupportedAppUsage;
 import android.util.Log;
 import android.util.Printer;
 import android.util.Slog;
@@ -104,6 +104,7 @@ public final class Looper {
         prepare(true);
     }
 
+	// dg2: 初始化.
     private static void prepare(boolean quitAllowed) {
         if (sThreadLocal.get() != null) {
             throw new RuntimeException("Only one Looper may be created per thread");
@@ -116,11 +117,12 @@ public final class Looper {
 
     /**
      * Initialize the current thread as a looper, marking it as an
-     * application's main looper. The main looper for your application
-     * is created by the Android environment, so you should never need
-     * to call this function yourself.  See also: {@link #prepare()}
+     * application's main looper. See also: {@link #prepare()}
+     *
+     * @deprecated The main looper for your application is created by the Android environment,
+     *   so you should never need to call this function yourself.
      */
-	// dg2: 初始化主线程looper.
+    @Deprecated
     public static void prepareMainLooper() {
         prepare(false);
         synchronized (Looper.class) {
@@ -177,7 +179,7 @@ public final class Looper {
         boolean slowDeliveryDetected = false;
 
         for (;;) {
-			// dg2: 从MessageQueue里面获取一条Message. 这个操作可能会被阻塞. 核心.
+			// dg2: 从MessageQueue里面获取一条Message. 这是阻塞调用. 核心.
             Message msg = queue.next(); // might block
 			// dg2: 返回时无消息, 仅在应用退出的时候发生.
             if (msg == null) {
@@ -305,7 +307,7 @@ public final class Looper {
 
 	// dg2: 构造函数
     private Looper(boolean quitAllowed) {
-		// dg2: looper持有 MessageQueue 对象.
+		// dg2: looper持有 MessageQueue 对象和 Thread对象.
         mQueue = new MessageQueue(quitAllowed);
         mThread = Thread.currentThread();
     }

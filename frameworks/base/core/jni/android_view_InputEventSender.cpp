@@ -235,7 +235,7 @@ status_t NativeInputEventSender::receiveFinishedSignals(JNIEnv* env) {
     }
 }
 
-
+// dg2: 创建 NativeInputEventSender 对象，并调用 initialize()方法进行初始化.
 static jlong nativeInit(JNIEnv* env, jclass clazz, jobject senderWeak,
         jobject inputChannelObj, jobject messageQueueObj) {
     sp<InputChannel> inputChannel = android_view_InputChannel_getInputChannel(env,
@@ -253,6 +253,7 @@ static jlong nativeInit(JNIEnv* env, jclass clazz, jobject senderWeak,
 
     sp<NativeInputEventSender> sender = new NativeInputEventSender(env,
             senderWeak, inputChannel, messageQueue);
+	// dg2: 初始化事件发送者(服务器端). 关键.
     status_t status = sender->initialize();
     if (status) {
         String8 message;
