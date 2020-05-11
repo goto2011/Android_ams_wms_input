@@ -306,7 +306,7 @@ void InputDispatcher::dispatchOnce() {
         // The dispatch loop might enqueue commands to run afterwards.
 		// dg2: 在没有 pending指令时执行 dispatchOnceInnerLocked()函数.
         if (!haveCommandsLocked()) {
-			// dg2: 关键
+			// dg2: 没有待执行的指令时执行 dispatchOnceInnerLocked().
             dispatchOnceInnerLocked(&nextWakeupTime);
         }
 
@@ -330,11 +330,14 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
     // Reset the key repeat timer whenever normal dispatch is suspended while the
     // device is in a non-interactive state.  This is to ensure that we abort a key
     // repeat if the device is just coming out of sleep.
+	// dg2: 判断事件分发是否允许，也就是在未开机、IMS未成功启动、关机等状态下是不可用的，默认值是false.
     if (!mDispatchEnabled) {
+		// dg2: 重置重复按键次数.
         resetKeyRepeatLocked();
     }
 
     // If dispatching is frozen, do not process timeouts or try to deliver any new events.
+	// dg2: 判断分发线程是否被冻结，是否可以配发，默认值是false.
     if (mDispatchFrozen) {
 #if DEBUG_FOCUS
         ALOGD("Dispatch frozen.  Waiting some more.");
@@ -345,6 +348,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
     // Optimize latency of app switches.
     // Essentially we start a short timeout when an app switch key (HOME / ENDCALL) has
     // been pressed.  When it expires, we preempt dispatch and drop all other pending events.
+	// dg2: 判断此处是不是正在切换应用，以便在home和endcall按键到来时，及时丢弃之前的事件，而直接响应特殊键.
     bool isAppSwitchDue = mAppSwitchDueTime <= currentTime;
     if (mAppSwitchDueTime < *nextWakeupTime) {
         *nextWakeupTime = mAppSwitchDueTime;
@@ -352,16 +356,19 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
 
     // Ready to start a new event.
     // If we don't already have a pending event, go grab one.
+	// dg2: mPendingEvent是即将要被配发的事件，此处是判断是否正在配发事件
     if (! mPendingEvent) {
         if (mInboundQueue.isEmpty()) {
             if (isAppSwitchDue) {
                 // The inbound queue is empty so the app switch key we were waiting
                 // for will never arrive.  Stop waiting for it.
+				// dg2: 如果队列是null。那么要等到的home或者挂机键永远不会到来，需要重置.
                 resetPendingAppSwitchLocked(false);
                 isAppSwitchDue = false;
             }
 
             // Synthesize a key repeat if appropriate.
+			// dg2: 对于某些设备，需要补发按下的重复事件.
             if (mKeyRepeatState.lastKeyEntry) {
                 if (currentTime >= mKeyRepeatState.nextRepeatTime) {
                     mPendingEvent = synthesizeKeyRepeatLocked(currentTime);
@@ -378,6 +385,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
             }
         } else {
             // Inbound queue has at least one entry.
+			// dg2: 如果正在配发的事件为null，那就再取一个，开始配发关键.
             mPendingEvent = mInboundQueue.dequeueAtHead();
             traceInboundQueueLengthLocked();
         }
@@ -388,17 +396,21 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         }
 
         // Get ready to dispatch the event.
+		// dg2: 重置此次事件分发的ANR超时时间，如果超过5秒，就会产生ANR.
         resetANRTimeoutsLocked();
     }
 
     // Now we have an event to dispatch.
     // All events are eventually dequeued and processed this way, even if we intend to drop them.
+	// dg2: 所有事件最终都会以这种方式出队和处理，即使我们打算删除它们。
     ALOG_ASSERT(mPendingEvent != nullptr);
     bool done = false;
     DropReason dropReason = DROP_REASON_NOT_DROPPED;
     if (!(mPendingEvent->policyFlags & POLICY_FLAG_PASS_TO_USER)) {
+		// dg2: 丢弃原因是因为窗口策略.
         dropReason = DROP_REASON_POLICY;
     } else if (!mDispatchEnabled) {
+		// dg2: 丢弃原因是因为分发被禁用.
         dropReason = DROP_REASON_DISABLED;
     }
 
@@ -423,6 +435,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         break;
     }
 
+	// dg2: 按键事件.
     case EventEntry::TYPE_KEY: {
         KeyEntry* typedEntry = static_cast<KeyEntry*>(mPendingEvent);
         if (isAppSwitchDue) {
@@ -444,7 +457,8 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         break;
     }
 
-	// dg2: 触摸事件
+	// dg2: 触摸事件.
+	// 根据不同的类型信息把它转换回原来的Entry信息，然后调用相应的分发方法.
     case EventEntry::TYPE_MOTION: {
         MotionEntry* typedEntry = static_cast<MotionEntry*>(mPendingEvent);
         if (dropReason == DROP_REASON_NOT_DROPPED && isAppSwitchDue) {
@@ -457,7 +471,7 @@ void InputDispatcher::dispatchOnceInnerLocked(nsecs_t* nextWakeupTime) {
         if (dropReason == DROP_REASON_NOT_DROPPED && mNextUnblockedEvent) {
             dropReason = DROP_REASON_BLOCKED;
         }
-		// dg2: 关键
+		// dg2: 分发触摸事件. 关键
         done = dispatchMotionLocked(currentTime, typedEntry,
                 &dropReason, nextWakeupTime);
         break;
@@ -550,19 +564,26 @@ void InputDispatcher::addRecentEventLocked(EventEntry* entry) {
     }
 }
 
+// dg2: 寻找触摸事件的目标窗口. 关键.
+// 默认值: addOutsideTargets = false, addPortalWindows = false
 sp<InputWindowHandle> InputDispatcher::findTouchedWindowAtLocked(int32_t displayId,
         int32_t x, int32_t y, bool addOutsideTargets, bool addPortalWindows) {
     // Traverse windows from front to back to find touched window.
+	// dg2: 根据 displayId获取对应显示屏上的所有窗口. 然后从头到底遍历窗口.
     const std::vector<sp<InputWindowHandle>> windowHandles = getWindowHandlesLocked(displayId);
     for (const sp<InputWindowHandle>& windowHandle : windowHandles) {
         const InputWindowInfo* windowInfo = windowHandle->getInfo();
+		// dg2: 如果 displayId匹配.
         if (windowInfo->displayId == displayId) {
             int32_t flags = windowInfo->layoutParamsFlags;
 
+			// dg2: 如果窗口可见.
             if (windowInfo->visible) {
                 if (!(flags & InputWindowInfo::FLAG_NOT_TOUCHABLE)) {
+					// dg2: 如果窗口不设置焦点, 或者不可触摸, 则它不可触摸.
                     bool isTouchModal = (flags & (InputWindowInfo::FLAG_NOT_FOCUSABLE
                             | InputWindowInfo::FLAG_NOT_TOUCH_MODAL)) == 0;
+					// dg2: 如果 window可以被触摸, 且坐标在窗口范围内.
                     if (isTouchModal || windowInfo->touchableRegionContainsPoint(x, y)) {
                         int32_t portalToDisplayId = windowInfo->portalToDisplayId;
                         if (portalToDisplayId != ADISPLAY_ID_NONE
@@ -571,6 +592,7 @@ sp<InputWindowHandle> InputDispatcher::findTouchedWindowAtLocked(int32_t display
                                 // For the monitoring channels of the display.
                                 mTempTouchState.addPortalWindow(windowHandle);
                             }
+							// dg2: 递归调用. 入口条件仅 portalToDisplayId有变化.
                             return findTouchedWindowAtLocked(
                                     portalToDisplayId, x, y, addOutsideTargets, addPortalWindows);
                         }
@@ -579,6 +601,7 @@ sp<InputWindowHandle> InputDispatcher::findTouchedWindowAtLocked(int32_t display
                     }
                 }
 
+				// dg2: 判断是否触摸window之外的区域.
                 if (addOutsideTargets && (flags & InputWindowInfo::FLAG_WATCH_OUTSIDE_TOUCH)) {
                     mTempTouchState.addOrUpdateWindow(
                             windowHandle, InputTarget::FLAG_DISPATCH_AS_OUTSIDE, BitSet32(0));
@@ -950,18 +973,22 @@ bool InputDispatcher::dispatchMotionLocked(
     ATRACE_CALL();
     // Preprocessing.
     if (! entry->dispatchInProgress) {
+		// dg2: 设置当前事件的配发进度.
         entry->dispatchInProgress = true;
 
+		// dg2: 打印事件的详情.
         logOutboundMotionDetails("dispatchMotion - ", entry);
     }
 
     // Clean up if dropping the event.
+	// dg2: 如果是丢弃事件则直接设置分发结果.
     if (*dropReason != DROP_REASON_NOT_DROPPED) {
         setInjectionResult(entry, *dropReason == DROP_REASON_POLICY
                 ? INPUT_EVENT_INJECTION_SUCCEEDED : INPUT_EVENT_INJECTION_FAILED);
         return true;
     }
 
+	// dg2: 判断是不是触摸屏事件.
     bool isPointerEvent = entry->source & AINPUT_SOURCE_CLASS_POINTER;
 
     // Identify targets.
@@ -971,10 +998,12 @@ bool InputDispatcher::dispatchMotionLocked(
     int32_t injectionResult;
     if (isPointerEvent) {
         // Pointer event.  (eg. touchscreen)
+		// dg2: 找触摸事件的目标窗口. 返回值放在inputTargets中, 是一个窗口列表, 即可能有多个窗口. 关键. 
         injectionResult = findTouchedWindowTargetsLocked(currentTime,
                 entry, inputTargets, nextWakeupTime, &conflictingPointerActions);
     } else {
         // Non touch event.  (eg. trackball)
+		// dg2: 找事件相关的焦点窗口. 注意, 触摸事件不依赖焦点.
         injectionResult = findFocusedWindowTargetsLocked(currentTime,
                 entry, inputTargets, nextWakeupTime);
     }
@@ -1014,11 +1043,13 @@ bool InputDispatcher::dispatchMotionLocked(
     }
 
     // Dispatch the motion.
+	// dg2: 指针冲突，此处可能由于触摸设备的不同up或者down等动作又多次，而再输入中只允许又一次up.
     if (conflictingPointerActions) {
         CancelationOptions options(CancelationOptions::CANCEL_POINTER_EVENTS,
                 "conflicting pointer actions");
         synthesizeCancelationEventsForAllConnectionsLocked(options);
     }
+	// dg2: 往指定窗口列表(多个) 分发触摸事件. 关键.
     dispatchEventLocked(currentTime, entry, inputTargets);
     return true;
 }
@@ -1058,6 +1089,7 @@ void InputDispatcher::logOutboundMotionDetails(const char* prefix, const MotionE
 #endif
 }
 
+// dg2: 向inputTargets中的目标窗口分发事件. 关键.
 void InputDispatcher::dispatchEventLocked(nsecs_t currentTime,
         EventEntry* eventEntry, const std::vector<InputTarget>& inputTargets) {
     ATRACE_CALL();
@@ -1070,9 +1102,12 @@ void InputDispatcher::dispatchEventLocked(nsecs_t currentTime,
     pokeUserActivityLocked(eventEntry);
 
     for (const InputTarget& inputTarget : inputTargets) {
+		// dg2: inputTarget 中包含的 inputChannel用于与window实例通信.
         ssize_t connectionIndex = getConnectionIndexLocked(inputTarget.inputChannel);
         if (connectionIndex >= 0) {
+			// dg2: 根据索引值从 mConnectionsByFd 中获取 connection 对象。
             sp<Connection> connection = mConnectionsByFd.valueAt(connectionIndex);
+			// dg2: 对连接的状态是否正常进行检测.
             prepareDispatchCycleLocked(currentTime, connection, eventEntry, &inputTarget);
         } else {
 #if DEBUG_FOCUS
@@ -1297,6 +1332,7 @@ Unresponsive:
     return injectionResult;
 }
 
+// dg2: 寻找触摸事件的目标窗口. 关键.
 int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
         const MotionEntry* entry, std::vector<InputTarget>& inputTargets, nsecs_t* nextWakeupTime,
         bool* outConflictingPointerActions) {
@@ -1309,11 +1345,13 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
 
     // For security reasons, we defer updating the touch state until we are sure that
     // event injection will be allowed.
+	// dg2: 出于安全原因，我们推迟更新触摸状态，直到我们确定将允许事件注入。
     int32_t displayId = entry->displayId;
     int32_t action = entry->action;
     int32_t maskedAction = action & AMOTION_EVENT_ACTION_MASK;
 
     // Update the touch state as needed based on the properties of the touch event.
+	// dg2: 根据触摸事件的属性，根据需要更新触摸状态。
     int32_t injectionResult = INPUT_EVENT_INJECTION_PENDING;
     InjectionPermission injectionPermission = INJECTION_PERMISSION_UNKNOWN;
     sp<InputWindowHandle> newHoverWindowHandle;
@@ -1371,15 +1409,18 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
         goto Failed;
     }
 
+	// dg2: 处理分屏的按下, 以及空悬或滚动.
     if (newGesture || (isSplit && maskedAction == AMOTION_EVENT_ACTION_POINTER_DOWN)) {
         /* Case 1: New splittable pointer going down, or need target for hover or scroll. */
 
+		// dg2: 取出了entry里面的pointerIndex与触摸点坐标值。
         int32_t pointerIndex = getMotionEventActionPointerIndex(action);
         int32_t x = int32_t(entry->pointerCoords[pointerIndex].
                 getAxisValue(AMOTION_EVENT_AXIS_X));
         int32_t y = int32_t(entry->pointerCoords[pointerIndex].
                 getAxisValue(AMOTION_EVENT_AXIS_Y));
         bool isDown = maskedAction == AMOTION_EVENT_ACTION_DOWN;
+		// dg2: 寻找触摸事件的目标窗口. 关键.
         sp<InputWindowHandle> newTouchedWindowHandle = findTouchedWindowAtLocked(
                 displayId, x, y, isDown /*addOutsideTargets*/, true /*addPortalWindows*/);
 
@@ -1388,6 +1429,7 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
                 : std::vector<TouchedMonitor>{};
 
         // Figure out whether splitting will be allowed for this window.
+		// dg2: 确认窗口是否支持分屏.
         if (newTouchedWindowHandle != nullptr
                 && newTouchedWindowHandle->getInfo()->supportsSplitTouch()) {
             // New window supports splitting.
@@ -1399,6 +1441,7 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
         }
 
         // Handle the case where we did not find a window.
+		// dg2: 如果找不到目标窗口, 则使用前台窗口.
         if (newTouchedWindowHandle == nullptr) {
             // Try to assign the pointer to the first foreground window we find, if there is one.
             newTouchedWindowHandle = mTempTouchState.getFirstForegroundWindowHandle();
@@ -1411,6 +1454,7 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
             goto Failed;
         }
 
+		// dg2: 设置窗口属性.
         if (newTouchedWindowHandle != nullptr) {
             // Set target flags.
             int32_t targetFlags = InputTarget::FLAG_FOREGROUND | InputTarget::FLAG_DISPATCH_AS_IS;
@@ -1441,6 +1485,7 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
 
         mTempTouchState.addGestureMonitors(newGestureMonitors);
     } else {
+		// dg2: 处理移动, 抬起, 以及非分屏的按下.
         /* Case 2: Pointer move, up, cancel or non-splittable pointer down. */
 
         // If the pointer is not currently down, then ignore the event.
@@ -1615,6 +1660,7 @@ int32_t InputDispatcher::findTouchedWindowTargetsLocked(nsecs_t currentTime,
     injectionResult = INPUT_EVENT_INJECTION_SUCCEEDED;
 
     for (const TouchedWindow& touchedWindow : mTempTouchState.windows) {
+		// dg2: 将找到的窗口列表存放入inputTargets中。关键.
         addWindowTargetLocked(touchedWindow.windowHandle, touchedWindow.targetFlags,
                 touchedWindow.pointerIds, inputTargets);
     }
@@ -1732,6 +1778,7 @@ Unresponsive:
     return injectionResult;
 }
 
+// dg2: 将原始的window数据进行了再次封装。。
 void InputDispatcher::addWindowTargetLocked(const sp<InputWindowHandle>& windowHandle,
         int32_t targetFlags, BitSet32 pointerIds, std::vector<InputTarget>& inputTargets) {
     sp<InputChannel> inputChannel = getInputChannelLocked(windowHandle->getToken());
@@ -1982,6 +2029,7 @@ void InputDispatcher::pokeUserActivityLocked(const EventEntry* eventEntry) {
     commandEntry->userActivityEventType = eventType;
 }
 
+// dg2: 对连接的状态是否正常进行检测.
 void InputDispatcher::prepareDispatchCycleLocked(nsecs_t currentTime,
         const sp<Connection>& connection, EventEntry* eventEntry, const InputTarget* inputTarget) {
     if (ATRACE_ENABLED()) {
@@ -2035,9 +2083,11 @@ void InputDispatcher::prepareDispatchCycleLocked(nsecs_t currentTime,
     }
 
     // Not splitting.  Enqueue dispatch entries for the event as is.
+	// dg2: 发送事件. 关键.
     enqueueDispatchEntriesLocked(currentTime, connection, eventEntry, inputTarget);
 }
 
+// dg2: 发送事件. 关键.
 void InputDispatcher::enqueueDispatchEntriesLocked(nsecs_t currentTime,
         const sp<Connection>& connection, EventEntry* eventEntry, const InputTarget* inputTarget) {
     if (ATRACE_ENABLED()) {
@@ -2050,6 +2100,7 @@ void InputDispatcher::enqueueDispatchEntriesLocked(nsecs_t currentTime,
     bool wasEmpty = connection->outboundQueue.isEmpty();
 
     // Enqueue dispatch entries for the requested modes.
+	// dg2: 事件入队.
     enqueueDispatchEntryLocked(connection, eventEntry, inputTarget,
             InputTarget::FLAG_DISPATCH_AS_HOVER_EXIT);
     enqueueDispatchEntryLocked(connection, eventEntry, inputTarget,
@@ -2840,7 +2891,8 @@ void InputDispatcher::notifyMotion(const NotifyMotionArgs* args) {
                 args->edgeFlags, args->xPrecision, args->yPrecision, args->downTime,
                 args->pointerCount, args->pointerProperties, args->pointerCoords, 0, 0);
 
-		// dg2: 将这个entry插入到了 mInboundQueue 这个 InputDispatcher 维护的成员变量中。关键.
+		// dg2: 将这个entry插入到了 mInboundQueue 中, 后者是 inputDispatcher的成员。
+		// 该 entry被真正分发的流程在 threadLoop() 中.
         needWake = enqueueInboundEventLocked(newEntry);
         mLock.unlock();
     } // release lock
@@ -3143,6 +3195,7 @@ void InputDispatcher::decrementPendingForegroundDispatches(EventEntry* entry) {
     }
 }
 
+// dg2: 根据 displayId 获取窗口列表.
 std::vector<sp<InputWindowHandle>> InputDispatcher::getWindowHandlesLocked(
         int32_t displayId) const {
     std::unordered_map<int32_t, std::vector<sp<InputWindowHandle>>>::const_iterator it =
@@ -3873,6 +3926,7 @@ void InputDispatcher::dumpMonitors(std::string& dump, const std::vector<Monitor>
     }
 }
 
+// dg2: 由 inputChannel构造 connection对象, 并加入到 mConnectionsByFd中, 以Fd为索引。
 status_t InputDispatcher::registerInputChannel(const sp<InputChannel>& inputChannel,
         int32_t displayId) {
 #if DEBUG_REGISTRATION
@@ -4068,6 +4122,7 @@ std::optional<int32_t> InputDispatcher::findGestureMonitorDisplayByTokenLocked(
     return std::nullopt;
 }
 
+// dg2: 通过 inputChannel的Fd来获取对应的Connection的索引。
 ssize_t InputDispatcher::getConnectionIndexLocked(const sp<InputChannel>& inputChannel) {
     if (inputChannel == nullptr) {
         return -1;
@@ -5186,6 +5241,7 @@ void InputDispatcher::TouchState::copyFrom(const TouchState& other) {
     gestureMonitors = other.gestureMonitors;
 }
 
+// dg2: 新增或更新窗口属性.
 void InputDispatcher::TouchState::addOrUpdateWindow(const sp<InputWindowHandle>& windowHandle,
         int32_t targetFlags, BitSet32 pointerIds) {
     if (targetFlags & InputTarget::FLAG_SPLIT) {

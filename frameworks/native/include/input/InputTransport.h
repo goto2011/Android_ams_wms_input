@@ -156,6 +156,8 @@ struct InputMessage {
  *
  * The input channel is closed when all references to it are released.
  */
+// dg2: 类: 与window实例通信 socket类. 跨进程通讯.
+// InputChannel包含了一个本地unix socket用于跨进程发送与接收输入信息。
 class InputChannel : public RefBase {
 protected:
     virtual ~InputChannel();
@@ -185,6 +187,7 @@ public:
      * Returns DEAD_OBJECT if the channel's peer has been closed.
      * Other errors probably indicate that the channel is broken.
      */
+	// dg2: 发送事件.
     status_t sendMessage(const InputMessage* msg);
 
     /* Receives a message sent by the other endpoint.
@@ -197,6 +200,7 @@ public:
      * Returns DEAD_OBJECT if the channel's peer has been closed.
      * Other errors probably indicate that the channel is broken.
      */
+	// dg2: 接受事件.
     status_t receiveMessage(InputMessage* msg);
 
     /* Returns a new object that has a duplicate of this channel's fd. */

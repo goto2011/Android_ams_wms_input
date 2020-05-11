@@ -212,11 +212,13 @@ enum {
 
     // Indicates that the device was in an interactive state when the
     // event was intercepted.
+	// dg2: 表示事件被拦截时设备处于交互状态。
     POLICY_FLAG_INTERACTIVE = 0x20000000,
 
     // Indicates that the event should be dispatched to applications.
     // The input event should still be sent to the InputDispatcher so that it can see all
     // input events received include those that it will not deliver.
+	// dg2: 表示事件要分发给应用程序.
     POLICY_FLAG_PASS_TO_USER = 0x40000000,
 };
 

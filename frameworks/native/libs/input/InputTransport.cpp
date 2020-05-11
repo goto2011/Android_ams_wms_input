@@ -241,12 +241,14 @@ InputChannel::~InputChannel() {
     ::close(mFd);
 }
 
+// dg2: 初始化FD
 void InputChannel::setFd(int fd) {
     if (mFd > 0) {
         ::close(mFd);
     }
     mFd = fd;
     if (mFd > 0) {
+		// dg2: 打开socket. O_NONBLOCK 表示非阻塞I/O.
         int result = fcntl(mFd, F_SETFL, O_NONBLOCK);
         LOG_ALWAYS_FATAL_IF(result != 0, "channel '%s' ~ Could not make socket "
             "non-blocking.  errno=%d", mName.c_str(), errno);

@@ -87,17 +87,21 @@ enum {
  * be added to input event coordinates to compensate for the absolute position of the
  * window area.
  */
+// dg2: 类: 与window实例的通信封装.
 struct InputTarget {
     enum {
         /* This flag indicates that the event is being delivered to a foreground application. */
+		// dg2: 事件发送给前台应用.
         FLAG_FOREGROUND = 1 << 0,
 
         /* This flag indicates that the MotionEvent falls within the area of the target
          * obscured by another visible window above it.  The motion event should be
          * delivered with flag AMOTION_EVENT_FLAG_WINDOW_IS_OBSCURED. */
+		// dg2: 事件送到覆盖窗口.
         FLAG_WINDOW_IS_OBSCURED = 1 << 1,
 
         /* This flag indicates that a motion event is being split across multiple windows. */
+		// dg2: 事件发送给多个窗口.
         FLAG_SPLIT = 1 << 2,
 
         /* This flag indicates that the pointer coordinates dispatched to the application
@@ -108,6 +112,7 @@ struct InputTarget {
 
         /* This flag indicates that the event should be sent as is.
          * Should always be set unless the event is to be transmuted. */
+		// dg2: 事件不被变形.
         FLAG_DISPATCH_AS_IS = 1 << 8,
 
         /* This flag indicates that a MotionEvent with AMOTION_EVENT_ACTION_DOWN falls outside
@@ -146,6 +151,7 @@ struct InputTarget {
         /* This flag indicates that the target of a MotionEvent is partly or wholly
          * obscured by another visible window above it.  The motion event should be
          * delivered with flag AMOTION_EVENT_FLAG_WINDOW_IS_PARTIALLY_OBSCURED. */
+		// dg2: 事件送到部分覆盖窗口.
         FLAG_WINDOW_IS_PARTIALLY_OBSCURED = 1 << 14,
 
     };
@@ -158,6 +164,7 @@ struct InputTarget {
 
     // The x and y offset to add to a MotionEvent as it is delivered.
     // (ignored for KeyEvents)
+	// dg2: x, y轴的偏移量.
     float xOffset, yOffset;
 
     // Scaling factor to apply to MotionEvent as it is delivered.
