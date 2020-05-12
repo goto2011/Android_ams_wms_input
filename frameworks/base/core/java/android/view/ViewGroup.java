@@ -2575,6 +2575,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
     }
 
     @Override
+	// dg2: 分发触摸事件. 关键.
     public boolean dispatchTouchEvent(MotionEvent ev) {
         if (mInputEventConsistencyVerifier != null) {
             mInputEventConsistencyVerifier.onTouchEvent(ev, 1);
@@ -2582,16 +2583,20 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
 
         // If the event targets the accessibility focused view and this is it, start
         // normal event dispatch. Maybe a descendant is what will handle the click.
+		// dg2: 如果是辅助功能事件，并且当前view是目标view，那么取消标志，进行普通分发.
         if (ev.isTargetAccessibilityFocus() && isAccessibilityFocusedViewOrHost()) {
             ev.setTargetAccessibilityFocus(false);
         }
 
         boolean handled = false;
+		// dg2: 安全原因检查触摸事件.
         if (onFilterTouchEventForSecurity(ev)) {
             final int action = ev.getAction();
             final int actionMasked = action & MotionEvent.ACTION_MASK;
 
             // Handle an initial down.
+			// dg2: 如果事件类型是按下，清除之前的处理，重新开始处理触摸动作.
+			// 可能的原因是: 由于应用切换，ANR或其他一些状态更改，框架可能已放弃了上一个手势的上移或取消事件。
             if (actionMasked == MotionEvent.ACTION_DOWN) {
                 // Throw away all previous state when starting a new touch gesture.
                 // The framework may have dropped the up or cancel event for the previous gesture
@@ -2601,36 +2606,49 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             }
 
             // Check for interception.
+			// dg2: 检查是否拦截事件. 关键.
             final boolean intercepted;
+			// dg2: 如果是按下事件（新的触摸动作），或者已经存在处理事件的子View.
             if (actionMasked == MotionEvent.ACTION_DOWN
                     || mFirstTouchTarget != null) {
+				// dg2: 检查是否不允许拦截事件. requestDisallowInterceptTouchEvent(true)被调用的情况.
                 final boolean disallowIntercept = (mGroupFlags & FLAG_DISALLOW_INTERCEPT) != 0;
                 if (!disallowIntercept) {
+					// dg2: 调用 onInterceptTouchEvent() 确定是否拦截事件.
                     intercepted = onInterceptTouchEvent(ev);
+					// dg2: 恢复action状态以避免其在上一行中被改变.
                     ev.setAction(action); // restore action in case it was changed
                 } else {
+					// dg2: 不拦截.
                     intercepted = false;
                 }
             } else {
                 // There are no touch targets and this action is not an initial down
                 // so this view group continues to intercept touches.
+				// dg2: 如果不是一个新触摸动作的开始（不是down），并且没有处理该消息的目标
+				// （mFirstTouchTarget为null），说明当前view应该负责处理该事件，
+				// 则当前view应该继续拦截并处理这个事件.
                 intercepted = true;
             }
 
             // If intercepted, start normal event dispatch. Also if there is already
             // a view that is handling the gesture, do normal event dispatch.
+			// dg2: 如果被当前view拦截，或者已经有处理该事件的目标，则去除辅助功能标志，进行普通的事件分发.
             if (intercepted || mFirstTouchTarget != null) {
                 ev.setTargetAccessibilityFocus(false);
             }
 
             // Check for cancelation.
+			// dg2: 检查是否为取消事件
             final boolean canceled = resetCancelNextUpFlag(this)
                     || actionMasked == MotionEvent.ACTION_CANCEL;
 
             // Update list of touch targets for pointer down, if needed.
+			// dg2: 分离触摸事件标志，如果是多点触摸，分别分发给多个view.
             final boolean split = (mGroupFlags & FLAG_SPLIT_MOTION_EVENTS) != 0;
             TouchTarget newTouchTarget = null;
             boolean alreadyDispatchedToNewTouchTarget = false;
+			// dg2: 如果未被取消并且没有被当前view拦截，则进行向下分发.
             if (!canceled && !intercepted) {
 
                 // If the event is targeting accessibility focus we give it to the
@@ -2638,18 +2656,23 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
                 // we clear the flag and dispatch the event to all children as usual.
                 // We are looking up the accessibility focused host to avoid keeping
                 // state since these events are very rare.
+				// dg2: 如果是辅助功能事件，则调用 findChildWithAccessibilityFocus()来确认目标view.
                 View childWithAccessibilityFocus = ev.isTargetAccessibilityFocus()
                         ? findChildWithAccessibilityFocus() : null;
 
+				// dg2: 如果是一个按下事件（初始事件）.
                 if (actionMasked == MotionEvent.ACTION_DOWN
                         || (split && actionMasked == MotionEvent.ACTION_POINTER_DOWN)
                         || actionMasked == MotionEvent.ACTION_HOVER_MOVE) {
+					// dg2: down事件的index总是0.
                     final int actionIndex = ev.getActionIndex(); // always 0 for down
+					// dg2: 获取触摸点对应的PointerId，一个id表示一个触摸点，如果不分离，则获取全部的id.
                     final int idBitsToAssign = split ? 1 << ev.getPointerId(actionIndex)
                             : TouchTarget.ALL_POINTER_IDS;
 
                     // Clean up earlier touch targets for this pointer id in case they
                     // have become out of sync.
+					// dg2: 清除之前的id信息.
                     removePointersFromTouchTargets(idBitsToAssign);
 
                     final int childrenCount = mChildrenCount;
@@ -2658,10 +2681,14 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
                         final float y = ev.getY(actionIndex);
                         // Find a child that can receive the event.
                         // Scan children from front to back.
+						// dg2: 创建待遍历的view列表，调用 buildTouchDispatchChildList().
                         final ArrayList<View> preorderedList = buildTouchDispatchChildList();
+						// dg2: 是否采用自定义view顺序（这个顺序将决定哪个view会先接收到事件）.
                         final boolean customOrder = preorderedList == null
                                 && isChildrenDrawingOrderEnabled();
                         final View[] children = mChildren;
+						
+						
                         for (int i = childrenCount - 1; i >= 0; i--) {
                             final int childIndex = getAndVerifyPreorderedIndex(
                                     childrenCount, i, customOrder);
@@ -3221,6 +3248,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      * The current target will receive an ACTION_CANCEL event, and no further
      * messages will be delivered here.
      */
+	// dg2: 确定是否拦截事件.
     public boolean onInterceptTouchEvent(MotionEvent ev) {
         if (ev.isFromSource(InputDevice.SOURCE_MOUSE)
                 && ev.getAction() == MotionEvent.ACTION_DOWN
@@ -4326,6 +4354,7 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
      */
     ArrayList<View> buildOrderedChildList() {
         final int childrenCount = mChildrenCount;
+		// dg2: 如果子view数小于等于1，或没有子view有z轴，直接返回null.
         if (childrenCount <= 1 || !hasChildWithZ()) return null;
 
         if (mPreSortedChildren == null) {
@@ -4336,14 +4365,19 @@ public abstract class ViewGroup extends View implements ViewParent, ViewManager 
             mPreSortedChildren.ensureCapacity(childrenCount);
         }
 
+		// dg2: 如果自定义绘制顺序，则应使用自定义分发顺序.
         final boolean customOrder = isChildrenDrawingOrderEnabled();
         for (int i = 0; i < childrenCount; i++) {
             // add next child (in child order) to end of list
+			// dg2: 获取正确的子view索引（不为自定义顺序时为i，自定义顺序时为自定义顺序对应的索引.
             final int childIndex = getAndVerifyPreorderedIndex(childrenCount, i, customOrder);
             final View nextChild = mChildren[childIndex];
+			// dg2: 保存z值. 如果view定义了z值属性，那么在屏幕最上层的view应该先接收到触摸事件。
             final float currentZ = nextChild.getZ();
 
             // insert ahead of any Views with greater Z
+			// dg2: 如果列表中最后一个view的z值大于待插入的view，将当前view插入其之前，
+			// 保证在后面从后向前遍历view时可以保存在屏幕最上面的view可以先接收到触摸事件
             int insertIndex = i;
             while (insertIndex > 0 && mPreSortedChildren.get(insertIndex - 1).getZ() > currentZ) {
                 insertIndex--;

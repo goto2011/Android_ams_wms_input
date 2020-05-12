@@ -13940,6 +13940,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             stopNestedScroll();
         }
 
+		// dg2: 安全原因检查触摸事件
         if (onFilterTouchEventForSecurity(event)) {
             if ((mViewFlags & ENABLED_MASK) == ENABLED && handleScrollBarDragging(event)) {
                 result = true;
