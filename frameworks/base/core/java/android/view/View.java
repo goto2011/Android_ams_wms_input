@@ -7247,6 +7247,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
     // NOTE: other methods on View should not call this method directly, but performClickInternal()
     // instead, to guarantee that the autofill manager is notified when necessary (as subclasses
     // could extend this method without calling super.performClick()).
+	// dg2: 执行点击. 检测了是否有监听的存在并执行.
     public boolean performClick() {
         // We still need to call this method to handle the cases where performClick() was called
         // externally, instead of through performClickInternal()
@@ -7256,12 +7257,14 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         final ListenerInfo li = mListenerInfo;
         if (li != null && li.mOnClickListener != null) {
             playSoundEffect(SoundEffectConstants.CLICK);
+			// dg2: 执行 onClick() 回调. 关键.
             li.mOnClickListener.onClick(this);
             result = true;
         } else {
             result = false;
         }
 
+		// dg2: 给辅助功能选项发送一条消息。
         sendAccessibilityEvent(AccessibilityEvent.TYPE_VIEW_CLICKED);
 
         notifyEnterOrExitForAutoFillIfNeeded(true);
@@ -13930,6 +13933,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         boolean result = false;
 
+		// dg2: 一致性检验，检查事件是否被改变.
         if (mInputEventConsistencyVerifier != null) {
             mInputEventConsistencyVerifier.onTouchEvent(event, 0);
         }
@@ -13937,27 +13941,36 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         final int actionMasked = event.getActionMasked();
         if (actionMasked == MotionEvent.ACTION_DOWN) {
             // Defensive cleanup for new gesture
+			// dg2: 停止滚动（如果在滚动）.
             stopNestedScroll();
         }
 
 		// dg2: 安全原因检查触摸事件
         if (onFilterTouchEventForSecurity(event)) {
+			// dg2: 如果事件为鼠标拖动滚动条.
             if ((mViewFlags & ENABLED_MASK) == ENABLED && handleScrollBarDragging(event)) {
                 result = true;
             }
             //noinspection SimplifiableIfStatement
             ListenerInfo li = mListenerInfo;
+			// dg2: 调用view的 onTouch().  关键.
             if (li != null && li.mOnTouchListener != null
                     && (mViewFlags & ENABLED_MASK) == ENABLED
                     && li.mOnTouchListener.onTouch(this, event)) {
+				// dg2: 如果注册了点击事件监听(onTouchListener)，并且当前view处于启动状态，
+				// 并且调用注册的onTouch方法返回了true，说明事件被消耗，标记结果为true.
+				// 注意: 这个时候已经调用了`onTouch()`进行事件分发处理.
                 result = true;
             }
 
+			// dg2: 如果没有被注册的onTouch方法消耗事件，那么调用View本身的onTouch方法，
+			// 如果返回了true，说明事件被消耗，标记结果为true
             if (!result && onTouchEvent(event)) {
                 result = true;
             }
         }
 
+		// dg2: 一致性检验，检查事件是否被改变.
         if (!result && mInputEventConsistencyVerifier != null) {
             mInputEventConsistencyVerifier.onUnhandledEvent(event, 0);
         }
@@ -13965,6 +13978,9 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         // Clean up after nested scrolls if this is the end of a gesture;
         // also cancel it if we tried an ACTION_DOWN but we didn't want the rest
         // of the gesture.
+		// dg2: 如果是up事件（系列触摸动作的终点），或者是cancel事件，
+		// 或者是初始事件并且我们没对它进行处理（回忆前面的内容，如果没有处理down事件，
+		// 那么也不会收到后面的事件），就停止滚动状态
         if (actionMasked == MotionEvent.ACTION_UP ||
                 actionMasked == MotionEvent.ACTION_CANCEL ||
                 (actionMasked == MotionEvent.ACTION_DOWN && !result)) {
@@ -15279,6 +15295,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @param event The motion event.
      * @return True if the event was handled, false otherwise.
      */
+	// dg2: view默认的 onTouchEvent(). 可以被复写.  关键.
     public boolean onTouchEvent(MotionEvent event) {
         final float x = event.getX();
         final float y = event.getY();
@@ -15291,6 +15308,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         if ((viewFlags & ENABLED_MASK) == DISABLED) {
             if (action == MotionEvent.ACTION_UP && (mPrivateFlags & PFLAG_PRESSED) != 0) {
+				// dg2: 如果view被禁用且按下状态为true，取消接下状态.
                 setPressed(false);
             }
             mPrivateFlags3 &= ~PFLAG3_FINGER_DOWN;
@@ -15298,6 +15316,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
             // events, it just doesn't respond to them.
             return clickable;
         }
+		// dg2: 如果为该view设置了触摸事件代理，则转发到代理处理触摸事件.
         if (mTouchDelegate != null) {
             if (mTouchDelegate.onTouchEvent(event)) {
                 return true;
@@ -15306,11 +15325,13 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         if (clickable || (viewFlags & TOOLTIP) == TOOLTIP) {
             switch (action) {
+				// dg2: 抬起事件. 抬起才是点击事件真正触发的地方.
                 case MotionEvent.ACTION_UP:
                     mPrivateFlags3 &= ~PFLAG3_FINGER_DOWN;
                     if ((viewFlags & TOOLTIP) == TOOLTIP) {
                         handleTooltipUp();
                     }
+					// dg2: 如果不可点击. 则去掉点击检查和长按检查.
                     if (!clickable) {
                         removeTapCallback();
                         removeLongPressCallback();
@@ -15323,8 +15344,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     if ((mPrivateFlags & PFLAG_PRESSED) != 0 || prepressed) {
                         // take focus if we don't have it already and we should in
                         // touch mode.
+						// dg2: 如果有prepressed或pressed标志.
                         boolean focusTaken = false;
                         if (isFocusable() && isFocusableInTouchMode() && !isFocused()) {
+							// dg2: 可以获得焦点但没有获得时, 请求获取焦点.
                             focusTaken = requestFocus();
                         }
 
@@ -15333,44 +15356,59 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                             // showed it as pressed.  Make it show the pressed
                             // state now (before scheduling the click) to ensure
                             // the user sees it.
+							// dg2: prepressed状态表示滚动容器中的点击检测还没有被消息队列执行，
+							// 这个时候如果抬起手指说明是一个点击事件，调用setPressed显示反馈
                             setPressed(true, x, y);
                         }
 
                         if (!mHasPerformedLongPress && !mIgnoreNextUpEvent) {
                             // This is a tap, so remove the longpress check
+							// dg2: 没有到达执行长按触发消息的时间就抬起了手指，说明这是一个单击事件，
+							// 移除长按触发消息.
                             removeLongPressCallback();
 
                             // Only perform take click actions if we were in the pressed state
+							// dg2: 仅在我们处于按下状态时才执行点击操作.
                             if (!focusTaken) {
                                 // Use a Runnable and post this rather than calling
                                 // performClick directly. This lets other visual state
                                 // of the view update before click actions start.
+								// dg2: 当当前view没有获取焦点时才能触发点击事件，
+								// 一个可以获取焦点的view, 会优先处理焦点获取, 而无法触发点击事件的. 关键.
                                 if (mPerformClick == null) {
                                     mPerformClick = new PerformClick();
                                 }
+								// dg2: 使用post来将performClick动作放入队列中执行, 
+								// 保证其他view视觉上的变化可以在点击事件被触发之前被看到.
                                 if (!post(mPerformClick)) {
+									// dg2: 如果post没有成功，则直接执行.
                                     performClickInternal();
                                 }
                             }
                         }
 
+						// dg2: UnsetPressedState为Runnable消息，用于取消view的prepressed或pressed状态.
                         if (mUnsetPressedState == null) {
                             mUnsetPressedState = new UnsetPressedState();
                         }
 
                         if (prepressed) {
+							// dg2: 取消prepressed状态.
                             postDelayed(mUnsetPressedState,
                                     ViewConfiguration.getPressedStateDuration());
                         } else if (!post(mUnsetPressedState)) {
                             // If the post failed, unpress right now
+							// dg2: 取消pressed状态.
                             mUnsetPressedState.run();
                         }
 
+						// dg2: 清除单击检测定时器.
                         removeTapCallback();
                     }
                     mIgnoreNextUpEvent = false;
                     break;
 
+				// dg2: 按下事件.
                 case MotionEvent.ACTION_DOWN:
                     if (event.getSource() == InputDevice.SOURCE_TOUCHSCREEN) {
                         mPrivateFlags3 |= PFLAG3_FINGER_DOWN;
@@ -15378,6 +15416,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     mHasPerformedLongPress = false;
 
                     if (!clickable) {
+						// dg2: 检查长按.
                         checkForLongClick(
                                 ViewConfiguration.getLongPressTimeout(),
                                 x,
@@ -15386,25 +15425,31 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                         break;
                     }
 
+					// dg2: 检查Button点击事件的特殊情况.
                     if (performButtonActionOnTouchDown(event)) {
                         break;
                     }
 
                     // Walk up the hierarchy to determine if we're inside a scrolling container.
+					// dg2: 向上遍历view以检查是否处在一个可滚动的容器中.
                     boolean isInScrollingContainer = isInScrollingContainer();
 
                     // For views inside a scrolling container, delay the pressed feedback for
                     // a short period in case this is a scroll.
+					// dg2: 如果是在滚动容器中，稍延迟触摸反馈来应对这是一个滚动操作的情况.
                     if (isInScrollingContainer) {
                         mPrivateFlags |= PFLAG_PREPRESSED;
                         if (mPendingCheckForTap == null) {
+							// dg2: 新建一个Runnable，用于延迟执行单击检测的任务.
                             mPendingCheckForTap = new CheckForTap();
                         }
                         mPendingCheckForTap.x = event.getX();
                         mPendingCheckForTap.y = event.getY();
+						// dg2: 利用消息队列来延迟发送检测单击事件的方法，延迟时间为getTapTimeout设置的超时.
                         postDelayed(mPendingCheckForTap, ViewConfiguration.getTapTimeout());
                     } else {
                         // Not inside a scrolling container, so show the feedback right away
+						// dg2: 没有在滚动容器中，马上显示触摸反馈，并且开始检查长按事件.
                         setPressed(true, x, y);
                         checkForLongClick(
                                 ViewConfiguration.getLongPressTimeout(),
@@ -15414,6 +15459,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     }
                     break;
 
+				// dg2: 取消事件.
                 case MotionEvent.ACTION_CANCEL:
                     if (clickable) {
                         setPressed(false);
@@ -15426,8 +15472,10 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     mPrivateFlags3 &= ~PFLAG3_FINGER_DOWN;
                     break;
 
+				// dg2: 移动事件.
                 case MotionEvent.ACTION_MOVE:
                     if (clickable) {
+						// dg2: 通知可能存在的子View或drawable触摸点发生了移动。
                         drawableHotspotChanged(x, y);
                     }
 
@@ -15438,6 +15486,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     if (ambiguousGesture && hasPendingLongPressCallback()) {
                         final float ambiguousMultiplier =
                                 ViewConfiguration.getAmbiguousGestureMultiplier();
+						// dg2: 检测由于移动，触摸点是否移出了view+slop扩展出的范围.
+						// touchSlop 的存在是为了保证在按下后轻微移出点击区域的情况下能正常判断点击.
                         if (!pointInView(x, y, touchSlop)) {
                             // The default action here is to cancel long press. But instead, we
                             // just extend the timeout here, in case the classification
@@ -15460,6 +15510,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
                     if (!pointInView(x, y, touchSlop)) {
                         // Outside button
                         // Remove any future long press/tap checks
+						// dg2: 移出了这个范围, 即为移动事件. 之前启动的长按/按下检查的 runable要取消掉.
                         removeTapCallback();
                         removeLongPressCallback();
                         if ((mPrivateFlags & PFLAG_PRESSED) != 0) {
@@ -16174,6 +16225,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
      * @hide
      */
     @UnsupportedAppUsage
+	// dg2: 如果变换矩阵是单位矩阵，则返回true。
     public final boolean hasIdentityMatrix() {
         return mRenderNode.hasIdentityMatrix();
     }
@@ -18415,6 +18467,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
 
         // Postpone the runnable until we know on which thread it needs to run.
         // Assume that the runnable will be successfully placed after attach.
+		// dg2: 往注册的Handler的消息队列或者自己的一个消息队列中发送需要被延时执行的消息.
         getRunQueue().postDelayed(action, delayMillis);
         return true;
     }
@@ -26260,10 +26313,13 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
     }
 
+	// dg2: 它被放到消息队列，在设置的超时之后被执行，如果这段时间它没有被移出队列，
+	// 那么说明这就是一个单击事件，那么就显示触摸反馈并开始长按检测。
     private void checkForLongClick(long delay, float x, float y, int classification) {
         if ((mViewFlags & LONG_CLICKABLE) == LONG_CLICKABLE || (mViewFlags & TOOLTIP) == TOOLTIP) {
             mHasPerformedLongPress = false;
 
+			// dg2: 检测是否到达了检测时间.
             if (mPendingCheckForLongPress == null) {
                 mPendingCheckForLongPress = new CheckForLongPress();
             }
@@ -27823,6 +27879,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
     }
 
+	// dg2: 检查长按的 Runnable.
     private final class CheckForLongPress implements Runnable {
         private int mOriginalWindowAttachCount;
         private float mX;
@@ -27835,6 +27892,8 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         private int mClassification;
 
         @Override
+		// dg2: 如果run()方法被执行，说明到达了设定的时间并且没有因为触摸点移动或者抬起而移除该Runnable信息，
+		// 为一个长按动作，执行performLongClick()方法来触发长按回调.
         public void run() {
             if ((mOriginalPressedState == isPressed()) && (mParent != null)
                     && mOriginalWindowAttachCount == mWindowAttachCount) {
@@ -27863,6 +27922,7 @@ public class View implements Drawable.Callback, KeyEvent.Callback,
         }
     }
 
+	// dg2: 一个Runnable，用于延迟执行单击检测的任务.
     private final class CheckForTap implements Runnable {
         public float x;
         public float y;
