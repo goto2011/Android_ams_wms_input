@@ -211,6 +211,7 @@ status_t BpBinder::transact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
 {
     // Once a binder has died, it will never come back to life.
+	// dg2: 一旦一个binder进程死亡，它将永远不会复活。
     if (mAlive) {
         status_t status = IPCThreadState::self()->transact(
             mHandle, code, data, reply, flags);

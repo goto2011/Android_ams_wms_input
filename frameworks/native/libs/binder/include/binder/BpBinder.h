@@ -29,6 +29,7 @@ namespace android {
 
 using binder_proxy_limit_callback = void(*)(int);
 
+// dg2: 类: BpBinder: 客户端
 class BpBinder : public IBinder
 {
 public:
@@ -42,6 +43,7 @@ public:
     virtual status_t    dump(int fd, const Vector<String16>& args);
 
     // NOLINTNEXTLINE(google-default-arguments)
+	// dg2: 往 /dev/binder节点写入数据.
     virtual status_t    transact(   uint32_t code,
                                     const Parcel& data,
                                     Parcel* reply,

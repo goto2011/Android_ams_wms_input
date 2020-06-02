@@ -2369,6 +2369,7 @@ bool KeyboardInputMapper::isMediaKey(int32_t keyCode) {
     return false;
 }
 
+// dg2: 处理按键.
 void KeyboardInputMapper::processKey(nsecs_t when, bool down, int32_t scanCode,
         int32_t usageCode) {
     int32_t keyCode;
@@ -4777,6 +4778,7 @@ bool TouchInputMapper::consumeRawTouches(nsecs_t when, uint32_t policyFlags) {
     return false;
 }
 
+// dg2: 处理虚拟按键.
 void TouchInputMapper::dispatchVirtualKey(nsecs_t when, uint32_t policyFlags,
         int32_t keyEventAction, int32_t keyEventFlags) {
     int32_t keyCode = mCurrentVirtualKey.keyCode;

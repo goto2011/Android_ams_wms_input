@@ -2746,6 +2746,7 @@ void InputDispatcher::accelerateMetaShortcuts(const int32_t deviceId, const int3
     }
 }
 
+// dg2: 分发按键事件.
 void InputDispatcher::notifyKey(const NotifyKeyArgs* args) {
 #if DEBUG_INBOUND_EVENT_DETAILS
     ALOGD("notifyKey - eventTime=%" PRId64
@@ -2784,6 +2785,7 @@ void InputDispatcher::notifyKey(const NotifyKeyArgs* args) {
             args->downTime, args->eventTime);
 
     android::base::Timer t;
+	// dg2: 入队之前先进行过滤.
     mPolicy->interceptKeyBeforeQueueing(&event, /*byref*/ policyFlags);
     if (t.duration() > SLOW_INTERCEPTION_THRESHOLD) {
         ALOGW("Excessive delay in interceptKeyBeforeQueueing; took %s ms",

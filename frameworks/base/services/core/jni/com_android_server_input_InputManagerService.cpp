@@ -1051,6 +1051,7 @@ bool NativeInputManager::filterInputEvent(const InputEvent* inputEvent, uint32_t
     return pass;
 }
 
+// dg2: 按键事件入队之前做拦截.
 void NativeInputManager::interceptKeyBeforeQueueing(const KeyEvent* keyEvent,
         uint32_t& policyFlags) {
     ATRACE_CALL();

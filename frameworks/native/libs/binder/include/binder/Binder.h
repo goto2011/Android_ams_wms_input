@@ -24,6 +24,7 @@
 // ---------------------------------------------------------------------------
 namespace android {
 
+// dg2: 类: BBinder类, 用于Server端.
 class BBinder : public IBinder
 {
 public:
@@ -103,6 +104,7 @@ private:
                             BpRefBase(const BpRefBase& o);
     BpRefBase&              operator=(const BpRefBase& o);
 
+	// dg2: mRemote实际上指的就是 BpBinder.
     IBinder* const          mRemote;
     RefBase::weakref_type*  mRefs;
     std::atomic<int32_t>    mState;

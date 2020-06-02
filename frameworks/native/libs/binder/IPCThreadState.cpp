@@ -647,6 +647,7 @@ void IPCThreadState::stopProcess(bool /*immediate*/)
     //kill(getpid(), SIGKILL);
 }
 
+// dg2: 往/dev/binder节点写入数据.
 status_t IPCThreadState::transact(int32_t handle,
                                   uint32_t code, const Parcel& data,
                                   Parcel* reply, uint32_t flags)

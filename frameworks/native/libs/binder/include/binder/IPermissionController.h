@@ -27,6 +27,7 @@ namespace android {
 
 // ----------------------------------------------------------------------
 
+// dg2: binder服务器端类的例子.
 class IPermissionController : public IInterface
 {
 public:
@@ -42,6 +43,7 @@ public:
 
     virtual int getPackageUid(const String16& package, int flags) = 0;
 
+	// dg2: 枚举量和函数顺序一一对应. client端的调用请求中, 用数字序号来指定被调用的函数.
     enum {
         CHECK_PERMISSION_TRANSACTION = IBinder::FIRST_CALL_TRANSACTION,
         NOTE_OP_TRANSACTION = IBinder::FIRST_CALL_TRANSACTION + 1,

@@ -160,6 +160,7 @@ sp<IBinder> ProcessState::getContextObject(const String16& name, const sp<IBinde
     return object;
 }
 
+// dg2: 创建一个线程, 在线程里面while循环, 监听是否有数据写入设备节点.
 void ProcessState::startThreadPool()
 {
     AutoMutex _l(mLock);
@@ -364,6 +365,7 @@ String8 ProcessState::makeBinderThreadName() {
     return name;
 }
 
+// dg2: 创建线程.
 void ProcessState::spawnPooledThread(bool isMain)
 {
     if (mThreadPoolStarted) {
@@ -393,6 +395,7 @@ String8 ProcessState::getDriverName() {
     return mDriverName;
 }
 
+// dg2: 打开 /dev/binder.
 static int open_driver(const char *driver)
 {
     int fd = open(driver, O_RDWR | O_CLOEXEC);
@@ -421,8 +424,10 @@ static int open_driver(const char *driver)
     return fd;
 }
 
+// dg2: 初始化.
 ProcessState::ProcessState(const char *driver)
     : mDriverName(String8(driver))
+	  // dg2: 打开 /dev/binder.
     , mDriverFD(open_driver(driver))
     , mVMStart(MAP_FAILED)
     , mThreadCountLock(PTHREAD_MUTEX_INITIALIZER)

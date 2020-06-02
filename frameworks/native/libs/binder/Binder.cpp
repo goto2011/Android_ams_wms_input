@@ -120,6 +120,7 @@ const String16& BBinder::getInterfaceDescriptor() const
 }
 
 // NOLINTNEXTLINE(google-default-arguments)
+// dg2: 调用请求. 也是通过 onTransact() 处理请求.
 status_t BBinder::transact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t flags)
 {
@@ -229,6 +230,7 @@ BBinder::~BBinder()
 
 
 // NOLINTNEXTLINE(google-default-arguments)
+// dg2: 服务器侧收到调用请求, 按命令字处理请求.
 status_t BBinder::onTransact(
     uint32_t code, const Parcel& data, Parcel* reply, uint32_t /*flags*/)
 {
@@ -247,6 +249,7 @@ status_t BBinder::onTransact(
             return dump(fd, args);
         }
 
+		// dg2: 执行请求.
         case SHELL_COMMAND_TRANSACTION: {
             int in = data.readFileDescriptor();
             int out = data.readFileDescriptor();

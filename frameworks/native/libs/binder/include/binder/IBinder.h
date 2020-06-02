@@ -47,6 +47,8 @@ class IShellCallback;
  * (method calls, property get and set) is down through a low-level
  * protocol implemented on top of the transact() API.
  */
+// dg2: 类: IBinder是一个接口类, 也就是C++中的纯虚基类. 它是BBinder和BpBinder的基类, 
+// 它里面定义的一个重要接口函数是transact.
 class [[clang::lto_visibility_public]] IBinder : public virtual RefBase
 {
 public:
@@ -54,8 +56,10 @@ public:
         FIRST_CALL_TRANSACTION  = 0x00000001,
         LAST_CALL_TRANSACTION   = 0x00ffffff,
 
+		// dg2: 探测指令
         PING_TRANSACTION        = B_PACK_CHARS('_','P','N','G'),
         DUMP_TRANSACTION        = B_PACK_CHARS('_','D','M','P'),
+		// dg2: 执行指令
         SHELL_COMMAND_TRANSACTION = B_PACK_CHARS('_','C','M','D'),
         INTERFACE_TRANSACTION   = B_PACK_CHARS('_', 'N', 'T', 'F'),
         SYSPROPS_TRANSACTION    = B_PACK_CHARS('_', 'S', 'P', 'R'),
@@ -64,7 +68,7 @@ public:
         FLAG_ONEWAY             = 0x00000001
     };
 
-                          IBinder();
+    IBinder();
 
     /**
      * Check if this IBinder implements the interface named by
